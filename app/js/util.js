@@ -184,3 +184,29 @@ export function readFileAs(file, as = 'arrayBuffer') {
     if (as === 'text') r.readAsText(file); else if (as === 'dataURL') r.readAsDataURL(file); else r.readAsArrayBuffer(file);
   });
 }
+
+// ---------- Axis range input ----------
+// Users type axis limits in their own units: pace "4:30" (per km/mi), time "45" (minutes) or "1:30" (h:mm),
+// distance in km/mi, elevation in m/ft, speed in km/h or mph, percent "60", plain numbers otherwise. Blank = auto.
+export function parseAxisVal(str, kind, units) {
+  if (str == null) return NaN;
+  const s = String(str).trim().replace(',', '.');
+  if (!s) return NaN;
+  const imp = units === 'imperial';
+  const parts = s.split(':').map((x) => parseFloat(x));
+  if (parts.some((x) => !isFinite(x))) return NaN;
+  const n = parts.length === 1 ? parts[0] : NaN;
+  switch (kind) {
+    case 'pace': { const sec = parts.length === 1 ? n * 60 : parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + parts[2]; return imp ? sec / (MI / KM) : sec; }
+    case 'time': return parts.length === 1 ? n * 60 : parts.length === 2 ? parts[0] * 3600 + parts[1] * 60 : parts[0] * 3600 + parts[1] * 60 + parts[2];
+    case 'dist': return n * (imp ? MI : KM);
+    case 'ele': return imp ? n * FT : n;
+    case 'speed': return imp ? n / 2.236936 : n / 3.6;
+    case 'pct': return n / 100;
+    default: return n;
+  }
+}
+export function axisHint(kind, units) {
+  const imp = units === 'imperial';
+  return { pace: imp ? 'm:ss /mi' : 'm:ss /km', time: 'minutes or h:mm', dist: imp ? 'mi' : 'km', ele: imp ? 'ft' : 'm', speed: imp ? 'mph' : 'km/h', pct: '%', hr: 'bpm', cad: 'spm', pwr: 'W' }[kind] || '';
+}

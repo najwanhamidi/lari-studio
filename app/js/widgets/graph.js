@@ -2,7 +2,7 @@
 import { register, progOf, stateOf } from './core.js';
 import { TS, drawText, textBox, col, rrect, measureStr } from '../render/draw.js';
 import { smoothSpeed, smoothSeries, fracIndex, getSplits } from '../data/activity.js';
-import { fmtPace, fmtElev, fmtSpeed, fmtInt, fmtDist, fmtDuration, isNum, clamp, rampColor, unitLen, distUnit, paceUnit } from '../util.js';
+import { fmtPace, fmtElev, fmtSpeed, fmtInt, fmtDist, fmtDuration, isNum, clamp, rampColor, unitLen, distUnit, paceUnit, parseAxisVal, axisHint } from '../util.js';
 import { splitCfgOf } from './metrics.js';
 
 export const GRAPH_METRICS = [['pace', 'Pace'], ['hr', 'Heart rate'], ['ele', 'Elevation'], ['speed', 'Speed'], ['cad', 'Cadence'], ['pwr', 'Power']];
@@ -54,6 +54,7 @@ export function graphSeries(act, metric, xAxis, smooth, N) {
   return (act._cache[key] = { xs, ys, lo, hi, avg, X, N });
 }
 
+export function yKind(m) { return { pace: 'pace', ele: 'ele', speed: 'speed' }[m] || m; }
 function splitValue(sp, metric) {
   return { pace: sp.pace, hr: sp.avgHr, ele: sp.eleEnd, speed: sp.speed, cad: sp.avgCad, pwr: sp.avgPwr }[metric];
 }
@@ -67,13 +68,13 @@ register({
     showTitle: true, title: '', showY: true, showX: true, yTicks: 3, grid: true, gridColor: '#ffffff26',
     showAvg: true, avgColor: '#ffffffcc', showMinMax: false, barGap: 0.25, barRadius: 6, bars: 30, yPad: 0.08, baseline: 'zero',
     cursor: true, cursorColor: '#ffffff', ghost: true, ghostOpacity: 0.18,
-    splits: { mode: 'km', every: 1, custom: '' },
+    splits: { mode: 'km', every: 1, custom: '' }, yMin: '', yMax: '', xMin: '', xMax: '',
     titleTS: TS({ size: 26, weight: 700, transform: 'upper', spacing: 2 }),
     axisTS: TS({ size: 20, weight: 500, role: 'muted', font: 'Inter' }),
     valueTS: TS({ size: 22, weight: 700, font: 'Inter', color: '#0d0f14', role: 'fixed' }),
   }),
   render(ctx, el, W, H, env) { drawGraph(ctx, el, W, H, env); },
-  schema: (el) => [
+  schema: (el, env) => [
     { title: 'Data', fields: [
       { k: 'props.metric', t: 'select', label: 'Metric', options: GRAPH_METRICS },
       { k: 'props.design', t: 'select', label: 'Design', options: GRAPH_DESIGNS },
@@ -96,7 +97,11 @@ register({
       { k: 'props.yTicks', t: 'range', label: 'Y ticks', min: 2, max: 6 }, { k: 'props.grid', t: 'toggle', label: 'Grid lines' }, { k: 'props.gridColor', t: 'color', label: 'Grid color', when: (e) => e.props.grid },
       { k: 'props.showAvg', t: 'toggle', label: 'Average line' }, { k: 'props.avgColor', t: 'color', label: 'Average color', when: (e) => e.props.showAvg },
       { k: 'props.showMinMax', t: 'toggle', label: 'Best / worst markers' },
-      { k: 'props.baseline', t: 'seg', label: 'Y range', options: [['zero', 'Auto'], ['tight', 'Tight']] },
+      { k: 'props.baseline', t: 'seg', label: 'Auto Y padding', options: [['zero', 'Roomy'], ['tight', 'Tight']] },
+      { k: 'yrange', t: 'axis', label: 'Y axis range', kMin: 'props.yMin', kMax: 'props.yMax', minLabel: 'Min', maxLabel: 'Max',
+        hint: `In ${axisHint(yKind(el.props.metric), env && env.units)}. Leave blank for automatic.${el.props.metric === 'pace' ? ' Example: 4:00 to 7:00.' : ''}` },
+      { k: 'xrange', t: 'axis', label: 'X axis range', kMin: 'props.xMin', kMax: 'props.xMax', minLabel: 'From', maxLabel: 'To',
+        hint: el.props.xAxis === 'time' ? 'In minutes or h:mm (e.g. 10 to 45, or 0:30 to 1:15). Zooms into part of the run.' : `In ${axisHint('dist', env && env.units)} (e.g. 2 to 8). Zooms into part of the run, or set past the end to leave space.` },
     ] },
     { title: 'Animation extras', fields: [{ k: 'props.cursor', t: 'toggle', label: 'Moving cursor & value' }, { k: 'props.cursorColor', t: 'color', label: 'Cursor color' }, { k: 'props.ghost', t: 'toggle', label: 'Show upcoming part faintly' }, { k: 'props.ghostOpacity', t: 'range', label: 'Upcoming opacity', min: 0, max: 1, step: 0.05, when: (e) => e.props.ghost }] },
     { title: 'Title text', ts: 'props.titleTS' }, { title: 'Axis text', ts: 'props.axisTS' }, { title: 'Cursor value text', ts: 'props.valueTS' },
@@ -128,19 +133,42 @@ export function drawGraph(ctx, el, W, H, env) {
     splits = getSplits(act, splitCfgOf(el, env)).filter((s) => isNum(splitValue(s, metric)));
     const v = splits.map((s) => splitValue(s, metric)); if (v.length) { lo = Math.min(...v); hi = Math.max(...v); }
   }
+  // X window (fractions of the whole run)
+  const XT = xAxis === 'time' ? act.C.tt[act.n - 1] : act.C.d[act.n - 1];
+  const xk = xAxis === 'time' ? 'time' : 'dist';
+  let xa = parseAxisVal(p.xMin, xk, units) / XT, xb = parseAxisVal(p.xMax, xk, units) / XT;
+  if (!isNum(xa)) xa = 0; if (!isNum(xb)) xb = 1;
+  if (xb < xa) [xa, xb] = [xb, xa];
+  xa = Math.max(0, xa); if (xb - xa < 0.005) xb = xa + 0.005;
+  const xCustom = xa > 1e-9 || Math.abs(xb - 1) > 1e-9;
+  if (xCustom) { // auto Y follows the visible part
+    let vals = [];
+    if (isSplit) vals = splits.filter((sp) => (xAxis === 'time' ? sp.endT : sp.endD) / XT > xa && (xAxis === 'time' ? sp.startT : sp.startD) / XT < xb).map((sp) => splitValue(sp, metric));
+    else for (let i = 0; i < G.N; i++) if (G.xs[i] >= xa && G.xs[i] <= xb && isNum(G.ys[i])) vals.push(G.ys[i]);
+    vals = vals.filter(isNum).sort((a, b) => a - b);
+    if (vals.length) { lo = vals[0]; hi = vals[vals.length - 1]; if (metric === 'pace' && !isSplit && vals.length > 10) { lo = vals[Math.floor(vals.length * 0.01)]; hi = Math.min(vals[Math.floor(vals.length * 0.97)], lo * 2.2); } }
+  }
   if (!isNum(lo) || !isNum(hi)) return;
   if (hi - lo < 1e-6) { hi += 1; lo -= 1; }
   const span = hi - lo;
   if (p.baseline === 'zero' && metric !== 'pace' && metric !== 'ele' && metric !== 'hr') lo = Math.min(lo, 0);
   else lo -= span * (p.baseline === 'tight' ? 0.02 : 0.25);
   hi += span * (p.yPad ?? 0.08);
+  // custom Y range
+  const yk = yKind(metric), uMin = parseAxisVal(p.yMin, yk, units), uMax = parseAxisVal(p.yMax, yk, units);
+  if (isNum(uMin)) lo = uMin;
+  if (isNum(uMax)) hi = uMax;
+  if (hi < lo) [lo, hi] = [hi, lo];
+  if (hi - lo < 1e-6) hi = lo + 1;
+  const yCustom = isNum(uMin) || isNum(uMax);
   const inv = metric === 'pace' && p.invert;
   const axs = p.axisTS;
   const yLabW = p.showY ? Math.max(measureStr(ctx, fmtMetric(metric, hi, units), axs), measureStr(ctx, fmtMetric(metric, lo, units), axs)) + axs.size * 0.6 : 0;
   const xLabH = p.showX ? axs.size * 1.6 : 0;
   const px0 = yLabW, py0 = top + (p.cursor && P < 1 ? p.valueTS.size * 1.8 : axs.size * 0.4), pw = Math.max(10, W - px0), ph = Math.max(10, H - py0 - xLabH);
   const Y = (v) => { const k = (v - lo) / (hi - lo); return py0 + ph - (inv ? 1 - k : k) * ph; };
-  const X = (x) => px0 + x * pw;
+  const X = (x) => px0 + ((x - xa) / (xb - xa)) * pw;
+  const inX = (x) => x >= xa - 1e-9 && x <= xb + 1e-9;
   const baseY = py0 + ph;
   // grid + y labels
   if (p.grid || p.showY) {
@@ -152,15 +180,16 @@ export function drawGraph(ctx, el, W, H, env) {
   }
   // x labels
   if (p.showX) {
-    const XT = xAxis === 'time' ? act.C.tt[act.n - 1] : act.C.d[act.n - 1];
     const ul = xAxis === 'time' ? 60 : unitLen(units);
-    const total = XT / ul;
-    const steps = [1, 2, 5, 10, 15, 20, 30, 60, 120];
-    const step = steps.find((s) => total / s <= 6) || 240;
-    for (let v = 0; v <= total + 1e-6; v += step) {
+    const total = XT / ul, v0 = xa * total, v1 = xb * total, spanU = v1 - v0;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 20, 30, 60, 120];
+    const step = steps.find((s) => spanU / s <= 6 && (xAxis !== 'time' || s >= 1)) || 240;
+    const dec = step < 1 ? 1 : 0;
+    for (let v = Math.ceil(v0 / step - 1e-9) * step; v <= v1 + 1e-6; v += step) {
       const x = X((v * ul) / XT);
-      const lab = xAxis === 'time' ? (v >= 60 ? `${Math.floor(v / 60)}h${v % 60 ? String(v % 60).padStart(2, '0') : ''}` : `${v}m`) : String(v);
-      if (x < W - axs.size * 2.5) drawText(ctx, lab, x, H - axs.size * 0.2, axs, env, v === 0 ? 'left' : 'center');
+      const vr = Math.round(v * 10) / 10;
+      const lab = xAxis === 'time' ? (vr >= 60 ? `${Math.floor(vr / 60)}h${vr % 60 ? String(Math.floor(vr % 60)).padStart(2, '0') : ''}` : `${Math.floor(vr)}m`) : vr.toFixed(dec);
+      if (x < W - axs.size * 2.5) drawText(ctx, lab, x, H - axs.size * 0.2, axs, env, x - px0 < axs.size * 1.5 ? 'left' : 'center');
     }
     drawText(ctx, xAxis === 'time' ? '' : distUnit(units), W, H - axs.size * 0.2, axs, env, 'right');
   }
@@ -172,6 +201,7 @@ export function drawGraph(ctx, el, W, H, env) {
   const lineCol = col(p.lineColor, env), fillCol = col(p.fillColor, env);
   const drawPass = (limit, ghost) => {
     ctx.save();
+    if (xCustom || yCustom) { ctx.beginPath(); ctx.rect(px0, yCustom ? py0 - 1 : -H, pw, yCustom ? ph + 2 : H * 3); ctx.clip(); }
     if (ghost) ctx.globalAlpha *= p.ghostOpacity;
     if (isSplit) drawSplitDesign(ctx, p, splits, metric, X, Y, baseY, limit, env, colorAt, lineCol, fillCol, act, xAxis);
     else drawSeriesDesign(ctx, p, G, X, Y, baseY, py0, ph, limit, env, colorAt, lineCol, fillCol);
@@ -186,18 +216,18 @@ export function drawGraph(ctx, el, W, H, env) {
   // avg line
   if (p.showAvg) {
     const av = isSplit ? avgOf(splits.map((s) => splitValue(s, metric))) : G.avg;
-    if (isNum(av)) { const y = Y(av); ctx.save(); ctx.strokeStyle = col(p.avgColor, env); ctx.lineWidth = 2.5; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(px0, y); ctx.lineTo(px0 + pw, y); ctx.stroke(); ctx.restore(); }
+    if (isNum(av) && av >= lo && av <= hi) { const y = Y(av); ctx.save(); ctx.strokeStyle = col(p.avgColor, env); ctx.lineWidth = 2.5; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(px0, y); ctx.lineTo(px0 + pw, y); ctx.stroke(); ctx.restore(); }
   }
   if (p.showMinMax && !isSplit) {
     let bi = -1, wi = -1;
     for (let i = 0; i < G.N; i++) { const v = G.ys[i]; if (!isNum(v)) continue; if (bi < 0 || (metric === 'pace' ? v < G.ys[bi] : v > G.ys[bi])) bi = i; if (wi < 0 || (metric === 'pace' ? v > G.ys[wi] : v < G.ys[wi])) wi = i; }
-    for (const [i, c] of [[bi, '@accent'], [wi, '@muted']]) { if (i < 0 || G.xs[i] > xCur) continue; const x = X(G.xs[i]), y = Y(clamp(G.ys[i], lo, hi)); ctx.save(); ctx.fillStyle = col(c, env); ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.restore(); drawText(ctx, fmtMetric(metric, G.ys[i], units), x, y - 16, axs, env, 'center'); }
+    for (const [i, c] of [[bi, '@accent'], [wi, '@muted']]) { if (i < 0 || G.xs[i] > xCur || !inX(G.xs[i]) || G.ys[i] < lo || G.ys[i] > hi) continue; const x = X(G.xs[i]), y = Y(clamp(G.ys[i], lo, hi)); ctx.save(); ctx.fillStyle = col(c, env); ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.restore(); drawText(ctx, fmtMetric(metric, G.ys[i], units), x, y - 16, axs, env, 'center'); }
   }
   // cursor
   if (p.cursor && P < 1 && !env.static) {
     const i = Math.min(G.N - 1, Math.round(xCur * (G.N - 1)));
     const v = isSplit ? currentSplitVal(splits, metric, xCur, act, xAxis) : G.ys[i];
-    if (isNum(v)) {
+    if (isNum(v) && inX(xCur)) {
       const x = X(xCur), y = Y(clamp(v, lo, hi));
       ctx.save(); ctx.strokeStyle = col(p.cursorColor, env); ctx.globalAlpha *= 0.6; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, py0); ctx.lineTo(x, py0 + ph); ctx.stroke(); ctx.restore();
       ctx.save(); ctx.fillStyle = col(p.cursorColor, env); ctx.shadowColor = col(p.lineColor, env); ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, Math.max(8, p.lineW * 1.6), 0, Math.PI * 2); ctx.fill(); ctx.restore();

@@ -16,6 +16,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 - Stat grid: pick which stats show (toggle avg pace, avg HR, distance, time…), rename, reorder.
 - Splits & laps: per-km/mile, **device laps** from the file, or **manual laps** (every X km, every X minutes, or custom marks like `1, 3, 5, 8.5`). Used by the splits table (11 designs, column toggles/rename/reorder), split pace/HR bar charts, split highlight (fastest/slowest/any/current), split progress.
 - Graphs: pace, heart rate (with HR-zone colours), elevation, cadence, speed, power — 12 designs (area, gradient, neon, heat, bars, split bars, steps, dots…).
+- **Axis ranges:** every widget with axes lets you set the range. Graphs have Y min/max (pace as `4:30`) and an X window in km/mi or minutes to zoom into part of the run. The daily chart, per-run chart, HR zone bars and gauge have their own scale min/max. Leave blank for automatic.
 - Route map (9 line styles incl. heat-by-pace/HR, start/finish markers, km markers, moving runner dot), HR zones (5 designs), gauge, progress bar/track, best efforts.
 - Multi-run: totals, run list (toggle day/date/name/distance/time/pace/HR/elev/cadence columns), daily chart, week strip, per-run chart, routes gallery.
 - Text (with data tokens like `{distance}`, `{avgPace}`, `{name}`), images, icon/emoji/badge stickers, shapes.
@@ -53,6 +54,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 6. On your phone open that link and choose **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). Desktop Chrome/Edge can also install it from the address bar.
 
 ## Versions
+- **v1.2** – editable axis ranges on graphs, weekly charts, HR zones and gauges. v1.1 kept on the `v2` branch.
 - **v1.1** – edit individual text inside widgets, round-down numbers, 19 new templates.
 - **v1.0** – first release. Kept on the `v1` branch.
 

@@ -2,7 +2,7 @@
 import { register, progOf, stateOf } from './core.js';
 import { TS, drawText, textBox, col, rrect, measureStr, drawIcon } from '../render/draw.js';
 import { tableProps, tableLayout, drawTable, TABLE_SCHEMA } from './table.js';
-import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, fmtDate, isNum, clamp, distUnit, paceUnit, DAYS, EASE, rampColor } from '../util.js';
+import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, fmtDate, isNum, clamp, distUnit, paceUnit, DAYS, EASE, rampColor, parseAxisVal, axisHint } from '../util.js';
 import { routePoints } from './map.js';
 
 export const RUN_COLS = [['day', 'Day'], ['date', 'Date'], ['name', 'Name'], ['dist', 'Distance'], ['time', 'Time'], ['pace', 'Avg pace'], ['hr', 'Avg HR'], ['elev', 'Elev gain'], ['cad', 'Cadence'], ['bar', 'Distance bar']];
@@ -57,22 +57,26 @@ register({
 // ---------- Day bars ----------
 register({
   type: 'mbars', name: 'Daily chart', auto: false, w: 900, h: 420, modes: ['multi'],
-  props: () => ({ metric: 'distance', design: 'bars', color: '@accent', color2: '@accent2', track: '#ffffff1a', radius: 14, gap: 0.3, showValues: true, showDays: true, dayFormat: 'short', hlMax: true, hlColor: '#ffffff', emptyDot: true, gradient: false,
+  props: () => ({ metric: 'distance', design: 'bars', color: '@accent', color2: '@accent2', track: '#ffffff1a', radius: 14, gap: 0.3, showValues: true, showDays: true, dayFormat: 'short', hlMax: true, hlColor: '#ffffff', emptyDot: true, gradient: false, yMin: '', yMax: '',
     dayTS: TS({ size: 24, weight: 700, transform: 'upper', role: 'muted', font: 'Inter' }), valueTS: TS({ size: 24, weight: 700, font: 'Inter' }) }),
   render(ctx, el, W, H, env) {
     const p = el.props, S = env.multi; if (!S) return;
     const P = progOf(el, env), k = EASE.outCubic(clamp(P, 0, 1));
     const days = S.days;
     const v = (d) => (p.metric === 'time' ? d.time : p.metric === 'ascent' ? d.ascent : d.distance);
-    const max = Math.max(...days.map(v), 1);
+    const autoMax = Math.max(...days.map(v), 1);
+    const yk = p.metric === 'time' ? 'time' : p.metric === 'ascent' ? 'ele' : 'dist';
+    const cMin = parseAxisVal(p.yMin, yk, env.units), cMax = parseAxisVal(p.yMax, yk, env.units);
+    const lo = isNum(cMin) ? cMin : 0, max = isNum(cMax) && cMax > lo ? cMax : Math.max(autoMax, lo + 1e-6);
+    const nv = (x) => clamp((x - lo) / (max - lo), 0, 1);
     const dayH = p.showDays ? p.dayTS.size * 1.8 : 0, valH = p.showValues ? p.valueTS.size * 1.6 : 0;
     const ch = H - dayH - valH, cw = W / days.length, bw = cw * (1 - p.gap);
     const fmtV = (x) => (p.metric === 'time' ? fmtDuration(x, 'hm').replace(/^0h /, '') : p.metric === 'ascent' ? fmtElev(x, env.units) : fmtDist(x, env.units, 1));
     const pts = [];
     days.forEach((d, i) => {
       const x = i * cw + (cw - bw) / 2, val = v(d), stagger = clamp(k * days.length * 1.2 - i * 0.6, 0, 1);
-      const h = (val / max) * ch * EASE.outCubic(Math.min(1, stagger * 1.4));
-      const isMax = p.hlMax && val === max && val > 0;
+      const h = nv(val) * ch * EASE.outCubic(Math.min(1, stagger * 1.4));
+      const isMax = p.hlMax && val === autoMax && val > 0;
       const c = isMax ? col(p.hlColor, env) : col(p.color, env);
       if (p.design === 'bars' || p.design === 'pills') {
         if (p.design === 'pills' || p.track) { ctx.fillStyle = col(p.track, env); rrect(ctx, x, valH, bw, ch, p.radius); ctx.fill(); }
@@ -81,7 +85,7 @@ register({
       } else if (p.design === 'lollipop') {
         if (val > 0) { ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = Math.max(4, bw * 0.12); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + bw / 2, valH + ch); ctx.lineTo(x + bw / 2, valH + ch - h); ctx.stroke(); ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + bw / 2, valH + ch - h, Math.min(bw / 2, 22), 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
       } else if (p.design === 'circles') {
-        const r = Math.min(bw / 2, ch / 2) * (val > 0 ? 0.35 + 0.65 * Math.sqrt(val / max) : 0.18) * Math.min(1, stagger * 1.4);
+        const r = Math.min(bw / 2, ch / 2) * (val > 0 ? 0.35 + 0.65 * Math.sqrt(nv(val)) : 0.18) * Math.min(1, stagger * 1.4);
         ctx.fillStyle = val > 0 ? c : col(p.track, env); ctx.beginPath(); ctx.arc(x + bw / 2, valH + ch / 2, r, 0, Math.PI * 2); ctx.fill();
       }
       pts.push([x + bw / 2, valH + ch - h, val]);
@@ -96,7 +100,7 @@ register({
       ctx.restore();
     }
   },
-  schema: () => [{ title: 'Chart', fields: [
+  schema: (el, env) => [{ title: 'Chart', fields: [
     { k: 'props.metric', t: 'seg', label: 'Metric', options: [['distance', 'Distance'], ['time', 'Time'], ['ascent', 'Elevation']] },
     { k: 'props.design', t: 'select', label: 'Design', options: [['bars', 'Bars'], ['pills', 'Pills with track'], ['lollipop', 'Lollipop'], ['circles', 'Circles'], ['area', 'Area'], ['line', 'Line']] },
     { k: 'props.color', t: 'color', label: 'Color' }, { k: 'props.gradient', t: 'toggle', label: 'Gradient bars' }, { k: 'props.color2', t: 'color', label: 'Gradient end', when: (e) => e.props.gradient },
@@ -104,6 +108,7 @@ register({
     { k: 'props.radius', t: 'range', label: 'Radius', min: 0, max: 60 }, { k: 'props.gap', t: 'range', label: 'Gap', min: 0, max: 0.8, step: 0.05 },
     { k: 'props.showValues', t: 'toggle', label: 'Values', half: true }, { k: 'props.showDays', t: 'toggle', label: 'Days', half: true },
     { k: 'props.dayFormat', t: 'seg', label: 'Day labels', options: [['short', 'Mon'], ['letter', 'M'], ['date', '18']] },
+    { k: 'yrange', t: 'axis', label: 'Value axis range', kMin: 'props.yMin', kMax: 'props.yMax', minLabel: 'Min', maxLabel: 'Max', hint: `In ${axisHint(el.props.metric === 'time' ? 'time' : el.props.metric === 'ascent' ? 'ele' : 'dist', env && env.units)}. Blank = 0 to the biggest day. A fixed max keeps several weeks on the same scale.` },
   ] }, { title: 'Day text', ts: 'props.dayTS' }, { title: 'Value text', ts: 'props.valueTS' }],
 });
 
@@ -205,7 +210,7 @@ register({
 // ---------- Per-run chart ----------
 register({
   type: 'mchart', name: 'Per-run chart', auto: false, w: 900, h: 420, modes: ['multi'],
-  props: () => ({ metric: 'avgPace', design: 'hbars', color: '@accent', track: '#ffffff1a', radius: 10, showValues: true, label: 'day', ramp: false,
+  props: () => ({ metric: 'avgPace', design: 'hbars', color: '@accent', track: '#ffffff1a', radius: 10, showValues: true, label: 'day', ramp: false, yMin: '', yMax: '',
     labelTS: TS({ size: 22, weight: 700, font: 'Inter', role: 'muted', transform: 'upper' }), valueTS: TS({ size: 24, weight: 700, font: 'Inter' }) }),
   render(ctx, el, W, H, env) {
     const p = el.props, S = env.multi; if (!S || !S.list.length) return;
@@ -213,7 +218,13 @@ register({
     const get = (a) => ({ avgPace: a.avgPace, avgHr: a.avgHr, distance: a.distance, time: a.moving, ascent: a.ascent }[p.metric]);
     const fmt = (v) => ({ avgPace: fmtPace(v, env.units), avgHr: fmtInt(v), distance: fmtDist(v, env.units, 1), time: fmtDuration(v), ascent: fmtElev(v, env.units) }[p.metric]);
     const vals = list.map(get).filter(isNum); const mx = Math.max(...vals), mn = Math.min(...vals);
-    const norm = (v) => p.metric === 'avgPace' ? 0.3 + 0.7 * ((mx - v) / ((mx - mn) || 1)) : 0.15 + 0.85 * (v / (mx || 1));
+    const MK = { avgPace: 'pace', avgHr: 'hr', distance: 'dist', time: 'time', ascent: 'ele' };
+    const cMin = parseAxisVal(p.yMin, MK[p.metric], env.units), cMax = parseAxisVal(p.yMax, MK[p.metric], env.units);
+    const custom = isNum(cMin) || isNum(cMax);
+    const lo = isNum(cMin) ? cMin : p.metric === 'avgPace' ? mn : 0, hi = isNum(cMax) ? cMax : mx;
+    const norm = (v) => !custom
+      ? (p.metric === 'avgPace' ? 0.3 + 0.7 * ((mx - v) / ((mx - mn) || 1)) : 0.15 + 0.85 * (v / (mx || 1)))
+      : clamp(p.metric === 'avgPace' ? (hi - v) / ((hi - lo) || 1) : (v - lo) / ((hi - lo) || 1), 0.02, 1);
     const lab = (a) => (p.label === 'name' ? a.name : p.label === 'date' ? fmtDate(a.start, 'short') : DAYS[a.start.getDay()]);
     const n = list.length;
     if (p.design === 'hbars') {
@@ -240,10 +251,11 @@ register({
       });
     }
   },
-  schema: () => [{ title: 'Per-run chart', fields: [
+  schema: (el, env) => [{ title: 'Per-run chart', fields: [
     { k: 'props.metric', t: 'select', label: 'Metric', options: [['avgPace', 'Avg pace'], ['avgHr', 'Avg HR'], ['distance', 'Distance'], ['time', 'Time'], ['ascent', 'Elevation']] },
     { k: 'props.design', t: 'seg', label: 'Design', options: [['hbars', 'Horizontal'], ['vbars', 'Vertical'], ['dots', 'Dots']] },
     { k: 'props.label', t: 'seg', label: 'Labels', options: [['day', 'Day'], ['date', 'Date'], ['name', 'Name']] },
     { k: 'props.color', t: 'color', label: 'Color' }, { k: 'props.ramp', t: 'toggle', label: 'Color by value' }, { k: 'props.track', t: 'color', label: 'Track' }, { k: 'props.radius', t: 'range', label: 'Radius', min: 0, max: 40 }, { k: 'props.showValues', t: 'toggle', label: 'Values' },
+    { k: 'yrange', t: 'axis', label: 'Value axis range', kMin: 'props.yMin', kMax: 'props.yMax', minLabel: 'Min', maxLabel: 'Max', hint: `In ${axisHint({ avgPace: 'pace', avgHr: 'hr', distance: 'dist', time: 'time', ascent: 'ele' }[el.props.metric], env && env.units)}. Blank = automatic.${el.props.metric === 'avgPace' ? ' Faster pace draws a longer bar.' : ''}` },
   ] }, { title: 'Label text', ts: 'props.labelTS' }, { title: 'Value text', ts: 'props.valueTS' }],
 });

@@ -279,3 +279,7 @@ kbd { background: var(--bg); border: 1px solid var(--line2); border-bottom-width
 .tsel-orig { font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
 .seltools button.tedit { color: #ff8fb6; }
 .tsel-sec .btnrow { margin-top: 6px; }
+.axis-ctl { width: 100%; }
+.axis-row { display: flex; align-items: center; gap: 6px; }
+.axis-row input { flex: 1; min-width: 0; }
+.axis-l { font-size: 11.5px; color: var(--muted); }

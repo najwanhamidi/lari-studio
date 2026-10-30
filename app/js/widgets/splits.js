@@ -3,7 +3,7 @@ import { register, progOf, stateOf } from './core.js';
 import { TS, drawText, textBox, col, rrect, drawIcon, measureStr } from '../render/draw.js';
 import { tableProps, tableLayout, drawTable, TABLE_SCHEMA } from './table.js';
 import { getSplits, bestEfforts, hrZones } from '../data/activity.js';
-import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, isNum, clamp, distUnit, paceUnit, unitLen, EASE } from '../util.js';
+import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, isNum, clamp, distUnit, paceUnit, unitLen, EASE, parseAxisVal, axisHint } from '../util.js';
 import { splitCfgOf } from './metrics.js';
 import { statBlock, drawOps, statTextStyles, STAT_LAYOUTS } from './stat.js';
 import { ZONE_COLORS, fmtMetric, metricUnit } from './graph.js';
@@ -160,6 +160,7 @@ register({
     { k: 'props.design', t: 'select', label: 'Design', options: [['bars', 'Horizontal bars'], ['columns', 'Columns'], ['stacked', 'Stacked bar'], ['donut', 'Donut'], ['pills', 'Pills']] },
     { k: 'props.showTitle', t: 'toggle', label: 'Title' }, { k: 'props.title', t: 'text', label: 'Title text', when: (e) => e.props.showTitle },
     { k: 'props.showTime', t: 'toggle', label: 'Time', half: true }, { k: 'props.showPct', t: 'toggle', label: 'Percent', half: true }, { k: 'props.showRange', t: 'toggle', label: 'BPM range' },
+    { k: 'zrange', t: 'axis', label: 'Bar scale', kMin: null, kMax: 'props.pctMax', maxLabel: 'Full bar = (%)', hint: 'Max percent for full-length bars (e.g. 100). Blank = biggest zone fills the bar.', when: (e) => e.props.design !== 'donut' && e.props.design !== 'stacked' },
     { k: 'props.names', t: 'list5', label: 'Zone names' }, { k: 'props.colors', t: 'colors5', label: 'Zone colors' },
     { k: 'props.trackColor', t: 'color', label: 'Track color' }, { k: 'props.barRadius', t: 'range', label: 'Radius', min: 0, max: 40 }, { k: 'props.ring', t: 'range', label: 'Donut thickness', min: 0.05, max: 0.5, step: 0.01, when: (e) => e.props.design === 'donut' },
   ] }, { title: 'Title text', ts: 'props.titleTS' }, { title: 'Label text', ts: 'props.labelTS' }, { title: 'Value text', ts: 'props.valueTS' }],
@@ -170,7 +171,8 @@ function drawZones(ctx, el, W, H, env) {
   const P = progOf(el, env), k = EASE.outCubic(P);
   let top = 0;
   if (p.showTitle && p.title) { const tb = textBox(ctx, p.title, p.titleTS); drawText(ctx, p.title, 0, tb.asc, p.titleTS, env); top = tb.h + p.titleTS.size * 0.6; }
-  const maxPct = Math.max(...Z.map((z) => z.pct), 0.01);
+  const cPct = parseAxisVal(p.pctMax, 'pct');
+  const maxPct = isNum(cPct) && cPct > 0 ? cPct : Math.max(...Z.map((z) => z.pct), 0.01);
   const val = (z) => [p.showTime ? fmtDuration(z.time) : '', p.showPct ? Math.floor(z.pct * 100 + 1e-6) + '%' : '', p.showRange ? `${z.min}-${z.max}` : ''].filter(Boolean).join('  ');
   const c = (i) => col(p.colors[i] || ZONE_COLORS[i], env);
   if (p.design === 'donut') {
@@ -193,7 +195,7 @@ function drawZones(ctx, el, W, H, env) {
     const lh = p.labelTS.size * 1.6 + (p.showTime || p.showPct ? p.valueTS.size * 1.4 : 0);
     const ch = H - top - lh, cw = W / 5, bw = cw * 0.62;
     Z.forEach((z, i) => {
-      const x = i * cw + (cw - bw) / 2, h = ch * (z.pct / maxPct) * k;
+      const x = i * cw + (cw - bw) / 2, h = ch * Math.min(1, z.pct / maxPct) * k;
       ctx.fillStyle = col(p.trackColor, env); rrect(ctx, x, top, bw, ch, p.barRadius); ctx.fill();
       ctx.fillStyle = c(i); rrect(ctx, x, top + ch - h, bw, Math.max(h, 1), p.barRadius); ctx.fill();
       drawText(ctx, p.names[i].split(' ')[0], i * cw + cw / 2, top + ch + p.labelTS.size * 1.2, p.labelTS, env, 'center');
@@ -209,7 +211,7 @@ function drawZones(ctx, el, W, H, env) {
     const y = top + i * (rh + gap), bx = p.design === 'pills' ? 0 : nameW, bw = W - bx - valW, bh = p.design === 'pills' ? rh : Math.min(rh * 0.6, 40);
     const by = y + (rh - bh) / 2;
     ctx.fillStyle = col(p.trackColor, env); rrect(ctx, bx, by, bw, bh, p.barRadius); ctx.fill();
-    ctx.fillStyle = c(i); rrect(ctx, bx, by, Math.max(bh * (p.design === 'pills' ? 0.0 : 0.2), bw * (z.pct / maxPct) * k), bh, p.barRadius); ctx.fill();
+    ctx.fillStyle = c(i); rrect(ctx, bx, by, Math.max(bh * (p.design === 'pills' ? 0.0 : 0.2), bw * Math.min(1, z.pct / maxPct) * k), bh, p.barRadius); ctx.fill();
     const ty = y + rh / 2 + p.labelTS.size * 0.35;
     if (p.design === 'pills') drawText(ctx, p.names[i], bx + p.labelTS.size * 0.6, ty, { ...p.labelTS, color: '#0d0f14' }, env);
     else drawText(ctx, p.names[i], 0, ty, p.labelTS, env);
@@ -282,14 +284,16 @@ register({
 // ---------- Gauge ----------
 register({
   type: 'gauge', name: 'Gauge', auto: false, w: 420, h: 340, keepAspect: false, modes: ['single'],
-  props: () => ({ metric: 'hr', design: 'arc', min: 0, max: 0, color: '@accent', track: '#ffffff26', thickness: 0.12, needle: true, ticks: true, label: '', zoneArc: true,
+  props: () => ({ metric: 'hr', design: 'arc', min: 0, max: 0, rMin: '', rMax: '', color: '@accent', track: '#ffffff26', thickness: 0.12, needle: true, ticks: true, label: '', zoneArc: true,
     valueTS: TS({ size: 80, weight: 700, font: 'Oswald' }), labelTS: TS({ size: 22, weight: 700, transform: 'upper', spacing: 2, role: 'muted' }) }),
   render(ctx, el, W, H, env) {
     const p = el.props, act = env.act; if (!act) return;
     const st = stateOf(el, env), P = progOf(el, env);
     const live = { hr: P >= 1 ? act.avgHr : st.hr, pace: P >= 1 ? act.avgPace : st.pace, cad: P >= 1 ? act.avgCad : st.cad, speed: P >= 1 ? act.avgSpeed : st.speed, pwr: P >= 1 ? act.avgPwr : st.pwr }[p.metric];
     const rng = { hr: [90, Math.max(act.maxHr || 190, 170)], pace: [act.avgPace * 1.5, act.avgPace * 0.7], cad: [140, 200], speed: [0, (act.maxSpeed || 5) * 1.1], pwr: [0, 500] }[p.metric] || [0, 100];
-    const lo = p.min || rng[0], hi = p.max || rng[1];
+    const gk = { pace: 'pace', speed: 'speed' }[p.metric] || p.metric;
+    const cMin = parseAxisVal(p.rMin, gk, env.units), cMax = parseAxisVal(p.rMax, gk, env.units);
+    const lo = isNum(cMin) ? cMin : p.min || rng[0], hi = isNum(cMax) ? cMax : p.max || rng[1];
     let f = clamp((live - lo) / (hi - lo), 0, 1); if (!isNum(f)) f = 0;
     const semi = p.design === 'semi';
     const a0 = semi ? Math.PI : Math.PI * 0.75, a1 = semi ? Math.PI * 2 : Math.PI * 2.25;
@@ -313,11 +317,11 @@ register({
     drawText(ctx, vs, cx, vy, vts, env, 'center');
     drawText(ctx, p.label || metricUnit(p.metric, env.units), cx, vy + p.labelTS.size * 1.5, p.labelTS, env, 'center');
   },
-  schema: () => [{ title: 'Gauge', fields: [
+  schema: (el, env) => [{ title: 'Gauge', fields: [
     { k: 'props.metric', t: 'select', label: 'Metric (live)', options: [['hr', 'Heart rate'], ['pace', 'Pace'], ['speed', 'Speed'], ['cad', 'Cadence'], ['pwr', 'Power']] },
     { k: 'props.design', t: 'seg', label: 'Design', options: [['arc', 'Arc'], ['semi', 'Semi'], ['ticks', 'Ticks']] },
     { k: 'props.label', t: 'text', label: 'Caption', placeholder: 'unit' },
-    { k: 'props.min', t: 'num', label: 'Min (0 = auto)', half: true }, { k: 'props.max', t: 'num', label: 'Max (0 = auto)', half: true },
+    { k: 'grange', t: 'axis', label: 'Scale range', kMin: 'props.rMin', kMax: 'props.rMax', minLabel: el.props.metric === 'pace' ? 'Slowest' : 'Min', maxLabel: el.props.metric === 'pace' ? 'Fastest' : 'Max', hint: `In ${axisHint({ pace: 'pace', speed: 'speed' }[el.props.metric] || el.props.metric, env && env.units)}. Blank = automatic.` },
     { k: 'props.color', t: 'color', label: 'Color' }, { k: 'props.track', t: 'color', label: 'Track' }, { k: 'props.thickness', t: 'range', label: 'Thickness', min: 0.02, max: 0.4, step: 0.01 },
     { k: 'props.needle', t: 'toggle', label: 'Needle' }, { k: 'props.zoneArc', t: 'toggle', label: 'HR zone colors', when: (e) => e.props.metric === 'hr' },
   ] }, { title: 'Value text', ts: 'props.valueTS' }, { title: 'Caption text', ts: 'props.labelTS' }],

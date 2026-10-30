@@ -61,6 +61,7 @@ function field(f, els) {
     case 'emoji': ctl = emojiPicker(get(), set); break;
     case 'image': ctl = imagePicker(get(), set); break;
     case 'splits': return splitsCtl(f, els);
+    case 'axis': return axisCtl(f, els);
     case 'cols': return colsCtl(f, els);
     case 'items': return itemsCtl(f, els);
     case 'multi': {
@@ -84,6 +85,15 @@ function imagePicker(val, set) {
   w.append(prev, button('Choose image…', () => inp.click()), inp);
   show(val); w._set = show;
   return w;
+}
+function axisCtl(f, els) {
+  const mk = (k, ph) => { const get = () => getPath(els[0], k) ?? ''; const i = textInput(get(), (v, fin) => apply(els, k, v.trim(), fin, 'Axis range'), { placeholder: ph }); controls.push({ ctl: i, get }); return i; };
+  const lo = f.kMin ? mk(f.kMin, 'auto') : null, hi = mk(f.kMax, 'auto');
+  const reset = button('Auto', () => { if (lo) { apply(els, f.kMin, '', false); lo.value = ''; } apply(els, f.kMax, '', true, 'Axis range'); hi.value = ''; }, 'tiny ghost');
+  const box = el('div', { class: 'axis-ctl' },
+    el('div', { class: 'axis-row' }, lo ? el('span', { class: 'axis-l' }, f.minLabel || 'From') : null, lo, el('span', { class: 'axis-l' }, f.maxLabel || 'To'), hi, reset),
+    f.hint ? el('div', { class: 'help' }, f.hint) : null);
+  return row(f.label, box, { stack: true });
 }
 function splitsCtl(f, els) {
   const p = () => getPath(els[0], f.k) || { mode: 'km' };
