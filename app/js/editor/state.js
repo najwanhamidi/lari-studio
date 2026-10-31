@@ -125,9 +125,12 @@ export function setTextOverride(value, final = true, e = tselElement(), t = App.
   if (e.type === 'text') e.props.text = value;
   else {
     const ts = getPath(e, t.p); if (!ts) return;
-    ts.txt = ts.txt || {};
-    if (value === t.orig) delete ts.txt[t.key]; else ts.txt[t.key] = value;
+    ts.txt = ts.txt || {}; ts.txo = ts.txo || {};
+    if (value === t.orig) { delete ts.txt[t.key]; if (!(ts.per && ts.per[t.key])) delete ts.txo[t.key]; }
+    else { ts.txt[t.key] = value; if (t.key !== '*') ts.txo[t.key] = t.orig; }
+    if (t.key !== '=' + t.orig) { delete ts.txt['=' + t.orig]; if (ts.per) delete ts.per['=' + t.orig]; } // drop legacy 'all identical' override
     if (!Object.keys(ts.txt).length) delete ts.txt;
+    if (!Object.keys(ts.txo).length) delete ts.txo;
   }
   commit('Edit text', final ? 0 : 450);
 }

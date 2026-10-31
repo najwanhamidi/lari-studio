@@ -221,7 +221,7 @@ function textSelSec(e, env) {
     const btns = el('div', { class: 'btnrow' }, button('Type on canvas', () => openInlineEditor(), 'small'));
     if (isTextOverridden()) btns.append(button('Reset to data', () => { setTextOverride(t.orig, true); scheduleRebuild(); }, 'small'));
     box.append(btns);
-    box.append(el('div', { class: 'tsel-orig' }, isTextOverridden() ? `Original: “${t.orig}”. Custom text stays fixed during the video.` : t.single ? 'Shows live data. Type to replace it with your own text.' : `Shows live data. Identical “${t.orig}” text in this widget changes together.`));
+    box.append(el('div', { class: 'tsel-orig' }, isTextOverridden() ? `Original: “${t.orig}”. Custom text stays fixed during the video.` : 'Shows live data. Type to replace it with your own text. Only this text changes.'));
   } else box.append(el('div', { class: 'tsel-orig' }, 'Data tokens like {distance} still work.'));
   // style scope
   let acc = null;
@@ -231,7 +231,7 @@ function textSelSec(e, env) {
       const k = t.key;
       acc = {
         first: () => ({ ...ts, ...((ts.per && ts.per[k]) || {}) }),
-        set: (key, v, fin) => { ts.per = ts.per || {}; ts.per[k] = ts.per[k] || {}; ts.per[k][key] = clone(v); selfChange = true; commit('Text style', fin ? 0 : 450); selfChange = false; if (key === 'font' || key === 'weight') ensureFontsLoaded(); },
+        set: (key, v, fin) => { ts.per = ts.per || {}; ts.per[k] = ts.per[k] || {}; if (k[0] === '#') { ts.txo = ts.txo || {}; ts.txo[k] = t.orig; } if (ts.per['=' + t.orig]) delete ts.per['=' + t.orig]; ts.per[k][key] = clone(v); selfChange = true; commit('Text style', fin ? 0 : 450); selfChange = false; if (key === 'font' || key === 'weight') ensureFontsLoaded(); },
       };
       if (ts.per && ts.per[k]) box.append(row('', button('Reset this text\'s style', () => { delete ts.per[k]; if (!Object.keys(ts.per).length) delete ts.per; commit('Text style'); scheduleRebuild(); }, 'small')));
     }

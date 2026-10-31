@@ -1,6 +1,6 @@
 {
   "name": "lari-studio",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "Customizable running overlays and animated videos from .fit/.tcx/.gpx files.",
   "scripts": {

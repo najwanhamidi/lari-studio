@@ -174,7 +174,7 @@ export function drawElement(ctx, el, env) {
     ctx.shadowColor = col(st.shadowColor, env); ctx.shadowBlur = st.shadowBlur; ctx.shadowOffsetX = st.shadowX; ctx.shadowOffsetY = st.shadowY;
   }
   ctx.translate(b.px, b.py);
-  env.entr = a;
+  env.entr = a; env.tcount = new Map();
   try { def.render(ctx, el, b.W, b.H, env); } catch (e) { console.warn('render', el.type, e); }
   env.entr = null;
   ctx.restore();
@@ -245,7 +245,7 @@ export function textHits(el, env) {
     const ts = pathGet(el, h.p);
     h.n = seen[h.p] = (seen[h.p] ?? -1) + 1;
     h.single = count[h.p] === 1;
-    h.key = ts && ts.txt && '*' in ts.txt ? '*' : h.single ? '*' : '=' + h.orig;
+    h.key = (ts && ts.txt && '*' in ts.txt) || h.single ? '*' : '#' + h.n;
   }
   return e.hits;
 }

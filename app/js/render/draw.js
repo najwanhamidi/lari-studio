@@ -26,16 +26,29 @@ function caseT(str, ts) {
   if (ts.transform === 'title') return str.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
   return str;
 }
-// Per-text overrides stored on a text style: ts.txt = { '*': text } (the only text drawn with this style)
-// or { '=<original>': text } (one of several); ts.per = { '=<original>': {style overrides} }.
-export function textKey(str, ts) { return ts.txt && '*' in ts.txt ? '*' : '=' + str; }
-export function resolveText(str, ts) {
+// Per-text overrides stored on a text style:
+//   ts.txt = { '*': text }            the only text drawn with this style
+//            { '#<n>': text }          the n-th text drawn with this style in the widget (ts.txo['#<n>'] = original it replaced)
+//            { '=<original>': text }   legacy (v1.1): every identical text
+//   ts.per = same keys → style overrides for just that text.
+// `occ` is the draw-order index (known while drawing); without it (layout/measuring) the widest matching override is used.
+export function resolveText(str, ts, occ) {
   str = str == null ? '' : String(str);
   if (ts.__raw || (!ts.txt && !ts.per)) return [str, ts];
-  const k = textKey(str, ts);
+  const txt = ts.txt || {}, txo = ts.txo || {}, per = ts.per || {};
+  let k = null;
+  if ('*' in txt) k = '*';
+  else if (occ != null) { const h = '#' + occ; if ((h in txt || h in per) && (txo[h] === undefined || txo[h] === str)) k = h; }
+  else { // measuring: widest override that replaces this same original text
+    let best = null;
+    for (const h in txt) if (h[0] === '#' && txo[h] === str && (best == null || String(txt[h]).length > String(txt[best]).length)) best = h;
+    if (best == null) for (const h in per) if (h[0] === '#' && txo[h] === str) { best = h; break; }
+    k = best;
+  }
+  if (k == null && ('=' + str in txt || '=' + str in per)) k = '=' + str;
   let s = str, t = ts;
-  if (ts.txt && k in ts.txt) s = String(ts.txt[k]);
-  if (ts.per && ts.per[k]) t = { ...ts, ...ts.per[k] };
+  if (k != null && k in txt) s = String(txt[k]);
+  if (k != null && per[k]) t = { ...ts, ...per[k] };
   return [s, { ...t, __raw: true }];
 }
 export function applyTransform(str, ts) {
@@ -95,7 +108,9 @@ function rawText(ctx, str, x, y, ts, mode) {
 // Draw a single line with baseline at y. align relative to x.
 export function drawText(ctx, str, x, y, ts0, env, align = 'left') {
   const orig = str == null ? '' : String(str);
-  const [s0, ts] = resolveText(orig, ts0);
+  let occ;
+  if (env && !ts0.__raw) { const fam = ts0.txt || ts0.per || ts0.__p; if (fam) { if (!env.tcount) env.tcount = new Map(); occ = env.tcount.get(fam) || 0; env.tcount.set(fam, occ + 1); } }
+  const [s0, ts] = resolveText(orig, ts0, occ);
   const s = caseT(s0, ts);
   ctx.save();
   ctx.font = fontStr(ts);
