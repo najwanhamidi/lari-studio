@@ -182,7 +182,7 @@ export async function saveProject() {
   await saveBlob(new Blob([JSON.stringify(proj)], { type: 'application/json' }), (App.act?.name || 'design').replace(/[^\w-]+/g, '-') + '.lari');
 }
 function openProject() {
-  const inp = el('input', { type: 'file', accept: '.lari,.json,application/json' });
+  const inp = el('input', { type: 'file' });
   inp.onchange = async () => {
     try {
       const p = JSON.parse(await readFileAs(inp.files[0], 'text'));
@@ -205,7 +205,7 @@ async function registerFont(name, url) {
   catch (e) { toast('Could not load font: ' + e.message, 'err'); return false; }
 }
 function pickFont() {
-  const inp = el('input', { type: 'file', accept: '.ttf,.otf,.woff,.woff2' });
+  const inp = el('input', { type: 'file' });
   inp.onchange = async () => {
     const f = inp.files[0]; if (!f) return;
     const name = f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');

@@ -36,7 +36,9 @@ function build() {
 
 // ---------- Data ----------
 function fileInput(multiple, onFiles) {
-  const inp = el('input', { type: 'file', accept: '.fit,.tcx,.gpx,.zip,.gz,application/zip', multiple: multiple ? true : null, style: { display: 'none' } });
+  // No 'accept' filter on purpose: phones and cloud pickers (Google Drive, iOS Files) don't know the .fit type
+  // and grey those files out. Files are recognised by their contents after picking instead.
+  const inp = el('input', { type: 'file', multiple: multiple ? true : null, style: { display: 'none' } });
   inp.onchange = () => { if (inp.files.length) onFiles([...inp.files]); inp.value = ''; };
   return inp;
 }

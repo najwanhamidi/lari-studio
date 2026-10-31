@@ -16,7 +16,7 @@ function parseBytes(name, u8) {
   const text = textDec.decode(u8);
   if (lower.endsWith('.tcx') || /<TrainingCenterDatabase/i.test(text.slice(0, 2000))) return tcxToRaw(text);
   if (lower.endsWith('.gpx') || /<gpx/i.test(text.slice(0, 2000))) return gpxToRaw(text);
-  throw new Error('Unsupported file type');
+  throw new Error('not a .fit, .tcx or .gpx run file');
 }
 
 const SUPPORTED = /\.(fit|tcx|gpx)(\.gz)?$/i;
