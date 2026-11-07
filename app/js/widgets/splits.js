@@ -242,8 +242,8 @@ register({
       const R = Math.min(W, H) / 2 - th / 2, cx = W / 2, cy = H / 2;
       ctx.save(); ctx.lineWidth = th; ctx.lineCap = 'round'; ctx.strokeStyle = tr; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke(); ctx.restore();
-      const t = Math.floor(frac * 100 + 1e-6) + '%'; const tb = textBox(ctx, t, { ...p.labelTS, size: R * 0.5 });
-      drawText(ctx, t, cx, cy + tb.asc / 2, { ...p.labelTS, size: R * 0.5 }, env, 'center');
+      if (p.showLabels !== false) { const t = Math.floor(frac * 100 + 1e-6) + '%'; const tb = textBox(ctx, t, { ...p.labelTS, size: R * 0.5 });
+        drawText(ctx, t, cx, cy + tb.asc / 2, { ...p.labelTS, size: R * 0.5 }, env, 'center'); }
       return;
     }
     if (p.design === 'segments' || p.design === 'dots') {

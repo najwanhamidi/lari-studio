@@ -2,6 +2,7 @@
 import { makeElement, layoutElement, REG } from '../widgets/core.js';
 import { deepMerge, clone } from '../util.js';
 import { MORE_SINGLE, MORE_MULTI } from './more.js';
+import { EXTRA_SINGLE, EXTRA_MULTI } from './extra.js';
 
 function kit(doc, env, ctx) {
   const W = doc.w, H = doc.h;
@@ -358,6 +359,8 @@ export const TEMPLATES = {
 
 TEMPLATES.single.push(...MORE_SINGLE);
 TEMPLATES.multi.push(...MORE_MULTI);
+TEMPLATES.single.push(...EXTRA_SINGLE);
+TEMPLATES.multi.push(...EXTRA_MULTI);
 
 // Build a template into a doc
 export function buildTemplate(tpl, doc, env, ctx) {
