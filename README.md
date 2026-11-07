@@ -29,7 +29,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 - Every widget: backdrop (none/solid/gradient), opacity, corner radius, padding, border (style/sides), drop shadow, blend mode, flip, rotation.
 - Zoom (buttons, Ctrl+wheel, pinch), undo/redo, duplicate, copy/paste, layers panel (reorder, hide, lock, rename), Trash with restore.
 - Theme colours: elements using theme swatches recolour together.
-- Templates: 40 for single runs, 22 for multi-run; save your own designs as templates.
+- Templates: 56 for single runs, 30 for multi-run; save your own designs as templates.
 
 **Numbers** are always rounded down (10.299 km shows 10.29, a 5:33.9 pace shows 5:33), never up.
 
@@ -54,6 +54,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 6. On your phone open that link and choose **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). Desktop Chrome/Edge can also install it from the address bar.
 
 ## Versions
+- **v1.4** – 24 more templates (Newspaper, Terminal, Boarding Pass, Nutrition Label, Certificate, Map Poster, Level Complete, Sunrise, Neon Sign, Polaroid, Calendar Page, Blueprint, Duotone…). v1.3 kept on the `v4` branch.
 - **v1.3** – 25 more templates (Cinematic, Race Bib, Half & Half, Scoreboard, Soft Pastel, Speedometer, Pulse, Vintage Poster, Sticker Pack, Lap Board, Live Corner, Month in Review, Run Streak, Training Log…). v1.2 kept on the `v3` branch.
 - **v1.2** – editable axis ranges on graphs, weekly charts, HR zones and gauges. v1.1 kept on the `v2` branch.
 - **v1.1** – edit individual text inside widgets, round-down numbers, 19 new templates.
