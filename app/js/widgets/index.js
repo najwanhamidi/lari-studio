@@ -89,6 +89,8 @@ export const LIBRARY = {
     { label: 'Icon sticker', icon: 'star', type: 'sticker' },
     { label: 'Emoji', icon: 'smile', type: 'sticker', over: { props: { kind: 'emoji' } } },
     { label: 'Badge', icon: 'award', type: 'sticker', over: { props: { kind: 'badge' }, w: 260, h: 260 } },
+    { label: 'Treadmill', icon: 'treadmill', type: 'sticker', over: { props: { kind: 'icon', icon: 'treadmill' } } },
+    { label: 'Treadmill badge', icon: 'treadmill', type: 'sticker', over: { props: { kind: 'badge', text: 'TREADMILL', shape: 'ribbon' }, w: 420, h: 120 } },
     { label: 'Rectangle', icon: 'badge-check', type: 'shape', over: { w: 500, h: 300 } },
     { label: 'Circle', icon: 'target', type: 'shape', over: { props: { shape: 'ellipse' } } },
     { label: 'Line', icon: 'ruler', type: 'shape', over: { props: { shape: 'line', strokeW: 6, color: '#ffffff' }, w: 600, h: 20 } },

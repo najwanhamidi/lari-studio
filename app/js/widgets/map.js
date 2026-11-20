@@ -4,6 +4,7 @@ import { TS, drawText, col, drawIcon, textBox } from '../render/draw.js';
 import { isNum, rampColor, unitLen, clamp } from '../util.js';
 import { RAMPS, zoneColor } from './graph.js';
 import { smoothSpeed } from '../data/activity.js';
+import { drawNoGps } from '../render/treadmill.js';
 
 export function routePoints(act, maxPts = 1500) {
   const key = 'route' + maxPts;
@@ -37,6 +38,8 @@ register({
     kmMarkers: 'none', kmColor: '#ffffff', fillInside: false, fillColor: '@accent', fillOpacity: 0.15,
     dot: 'pulse', dotColor: '#ffffff', remaining: 'ghost', ghostColor: '#ffffff40',
     labelTS: TS({ size: 22, weight: 800, transform: 'upper', spacing: 1, color: '#0d0f14', role: 'fixed' }),
+    noGps: 'treadmill', noGpsText: 'Treadmill', noGpsSub: '', noGpsColor: '@accent',
+    noGpsTS: TS({ size: 44, weight: 800, transform: 'upper', spacing: 4, font: 'Inter' }),
   }),
   render(ctx, el, W, H, env) { drawMap(ctx, el, W, H, env); },
   schema: () => [
@@ -61,14 +64,23 @@ register({
       { k: 'props.dot', t: 'select', label: 'Runner marker', options: [['none', 'None'], ['dot', 'Dot'], ['pulse', 'Pulse'], ['runner', 'Runner icon'], ['arrow', 'Arrow']] }, { k: 'props.dotColor', t: 'color', label: 'Marker color' },
       { k: 'props.remaining', t: 'seg', label: 'Upcoming route', options: [['ghost', 'Faint'], ['hide', 'Hidden']] }, { k: 'props.ghostColor', t: 'color', label: 'Faint color', when: (e) => e.props.remaining === 'ghost' },
     ] },
-    { title: 'Label text', ts: 'props.labelTS' },
+    { title: 'Runs without GPS (treadmill)', fields: [
+      { k: 'props.noGps', t: 'seg', label: 'Show', options: [['treadmill', 'Treadmill + text'], ['art', 'Treadmill only'], ['text', 'Text only'], ['blank', 'Nothing']] },
+      { k: 'props.noGpsText', t: 'text', label: 'Text', when: (e) => e.props.noGps !== 'art' && e.props.noGps !== 'blank' },
+      { k: 'props.noGpsSub', t: 'text', label: 'Second line', placeholder: 'e.g. Indoor run', when: (e) => e.props.noGps !== 'art' && e.props.noGps !== 'blank' },
+      { k: 'props.noGpsColor', t: 'color', label: 'Treadmill color', when: (e) => e.props.noGps === 'treadmill' || e.props.noGps === 'art' },
+    ] },
+    { title: 'Label text', ts: 'props.labelTS' }, { title: 'Treadmill text', ts: 'props.noGpsTS' },
   ],
 });
 
 function drawMap(ctx, el, W, H, env) {
   const p = el.props, act = env.act;
   const R = act && routePoints(act);
-  if (!R) { ctx.save(); ctx.strokeStyle = '#ffffff55'; ctx.setLineDash([10, 10]); ctx.lineWidth = 3; ctx.strokeRect(0, 0, W, H); ctx.restore(); drawText(ctx, 'No GPS data', W / 2, H / 2, TS({ size: 32 }), env, 'center'); return; }
+  if (!R) { // no GPS: treadmill / indoor run
+    drawNoGps(ctx, 0, 0, W, H, { mode: p.noGps || 'treadmill', color: p.noGpsColor || p.color, text: p.noGpsText ?? 'Treadmill', sub: p.noGpsSub || '', ts: p.noGpsTS || TS({ size: 44, weight: 800 }), f: progOf(el, env) }, env);
+    return;
+  }
   const P = progOf(el, env), st = stateOf(el, env);
   const rot = (p.rotate || 0) * Math.PI / 180, cs = Math.cos(rot), sn = Math.sin(rot);
   const cx0 = (R.minX + R.maxX) / 2, cy0 = (R.minY + R.maxY) / 2;

@@ -4,8 +4,9 @@ import { TS, drawText, textBox, col, rrect, measureStr, drawIcon } from '../rend
 import { tableProps, tableLayout, drawTable, TABLE_SCHEMA } from './table.js';
 import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, fmtDate, isNum, clamp, distUnit, paceUnit, DAYS, EASE, rampColor, parseAxisVal, axisHint } from '../util.js';
 import { routePoints } from './map.js';
+import { drawTreadmillArt } from '../render/treadmill.js';
 
-export const RUN_COLS = [['day', 'Day'], ['date', 'Date'], ['name', 'Name'], ['dist', 'Distance'], ['time', 'Time'], ['pace', 'Avg pace'], ['hr', 'Avg HR'], ['elev', 'Elev gain'], ['cad', 'Cadence'], ['bar', 'Distance bar']];
+export const RUN_COLS = [['day', 'Day'], ['date', 'Date'], ['name', 'Name'], ['dist', 'Distance'], ['time', 'Time'], ['pace', 'Avg pace'], ['hr', 'Avg HR'], ['elev', 'Elev gain'], ['cad', 'Cadence'], ['type', 'Outdoor / treadmill'], ['bar', 'Distance bar']];
 
 function runRows(el, env, staticAll) {
   const p = el.props, S = env.multi; if (!S) return [];
@@ -19,7 +20,7 @@ function runRows(el, env, staticAll) {
       cells: {
         day: DAYS[a.start.getDay()], date: fmtDate(a.start, p.dateStyle || 'short'), name: a.name,
         dist: fmtDist(a.distance, env.units, p.decimals ?? 2) + (p.units ? ' ' + distUnit(env.units) : ''), time: fmtDuration(a.moving), pace: fmtPace(a.avgPace, env.units) + (p.units ? paceUnit(env.units) : ''),
-        hr: fmtInt(a.avgHr), elev: fmtElev(a.ascent, env.units), cad: fmtInt(a.avgCad),
+        hr: fmtInt(a.avgHr), elev: fmtElev(a.ascent, env.units), cad: fmtInt(a.avgCad), type: a.hasGps ? (p.outdoorLabel ?? 'Outdoor') : (p.treadmillLabel ?? 'Treadmill'),
       },
       bar: 0.15 + 0.85 * (a.distance / maxD), alpha: appear,
       hl: p.hlMode === 'longest' && a === longest ? 'fast' : p.hlMode === 'fastest' && a === fastest ? 'fast' : null,
@@ -28,8 +29,8 @@ function runRows(el, env, staticAll) {
 }
 function runCols(el) {
   const p = el.props;
-  const labels = { day: 'Day', date: 'Date', name: 'Run', dist: 'Dist', time: 'Time', pace: 'Pace', hr: 'HR', elev: 'Elev', cad: 'Cad', bar: '' };
-  return p.columns.filter((c) => c.on).map((c) => ({ key: c.k, label: c.label || labels[c.k], align: /name|day|date/.test(c.k) ? 'left' : 'right', bar: c.k === 'bar', chip: c.k === 'pace', ts: c.k === 'day' ? p.dayTS : c.k === 'name' ? p.nameTS : undefined }));
+  const labels = { day: 'Day', date: 'Date', name: 'Run', dist: 'Dist', time: 'Time', pace: 'Pace', hr: 'HR', elev: 'Elev', cad: 'Cad', type: 'Type', bar: '' };
+  return p.columns.filter((c) => c.on).map((c) => ({ key: c.k, label: c.label || labels[c.k], align: /name|day|date|type/.test(c.k) ? 'left' : 'right', bar: c.k === 'bar', chip: c.k === 'pace', ts: c.k === 'day' ? p.dayTS : c.k === 'name' ? p.nameTS : undefined }));
 }
 register({
   type: 'mlist', name: 'Run list', auto: true, modes: ['multi'],
@@ -162,11 +163,12 @@ register({
 // ---------- Routes grid ----------
 register({
   type: 'mroutes', name: 'Routes', auto: false, w: 900, h: 600, modes: ['multi'],
-  props: () => ({ design: 'grid', cols: 3, color: '@accent', width: 5, glow: 12, cellBg: '#ffffff12', radius: 18, gap: 18, showLabel: true, label: 'dist', palette: false,
+  props: () => ({ design: 'grid', cols: 3, color: '@accent', width: 5, glow: 12, cellBg: '#ffffff12', radius: 18, gap: 18, showLabel: true, label: 'dist', palette: false, treadmill: true, treadmillLabel: 'TREADMILL',
     labelTS: TS({ size: 22, weight: 700, font: 'Inter' }) }),
   render(ctx, el, W, H, env) {
     const p = el.props, S = env.multi; if (!S) return;
-    const list = S.list.filter((a) => a.hasGps), P = progOf(el, env);
+    const P = progOf(el, env);
+    const list = p.treadmill === false || p.design === 'overlay' ? S.list.filter((a) => a.hasGps) : S.list;
     if (!list.length) { drawText(ctx, 'No GPS routes', W / 2, H / 2, TS({ size: 30 }), env, 'center'); return; }
     const pal = ['#c6ff3d', '#00e0ff', '#ff6bd6', '#ffb020', '#8b5cf6', '#22c55e', '#f43f5e', '#38bdf8'];
     const draw = (a, x, y, w, h, color, f) => {
@@ -192,7 +194,8 @@ register({
       ctx.save(); ctx.globalAlpha *= Math.min(1, f * 3);
       if (p.cellBg) { ctx.fillStyle = col(p.cellBg, env); rrect(ctx, x, y, cw, ch, p.radius); ctx.fill(); }
       const pad = Math.min(cw, ch) * 0.12;
-      draw(a, x + pad, y + pad, cw - 2 * pad, ch - 2 * pad - labH, p.palette ? pal[i % pal.length] : col(p.color, env), f);
+      if (a.hasGps) draw(a, x + pad, y + pad, cw - 2 * pad, ch - 2 * pad - labH, p.palette ? pal[i % pal.length] : col(p.color, env), f);
+      else { drawTreadmillArt(ctx, x + pad * 1.4, y + pad, cw - 2.8 * pad, ch - 2 * pad - labH - (p.treadmillLabel ? p.labelTS.size * 1.3 : 0), p.palette ? pal[i % pal.length] : col(p.color, env), f, 1.2); if (p.treadmillLabel) drawText(ctx, p.treadmillLabel, x + cw / 2, y + ch - pad * 0.6 - labH, { ...p.labelTS, opacity: (p.labelTS.opacity ?? 1) * 0.8 }, env, 'center'); }
       if (p.showLabel) { const s = p.label === 'name' ? a.name : p.label === 'day' ? DAYS[a.start.getDay()].toUpperCase() + ' · ' + fmtDist(a.distance, env.units, 1) + ' ' + distUnit(env.units) : fmtDist(a.distance, env.units, 1) + ' ' + distUnit(env.units); drawText(ctx, s, x + cw / 2, y + ch - pad * 0.6, p.labelTS, env, 'center'); }
       ctx.restore();
     });
@@ -204,6 +207,7 @@ register({
     { k: 'props.width', t: 'range', label: 'Line width', min: 1, max: 20, step: 0.5 }, { k: 'props.glow', t: 'range', label: 'Glow', min: 0, max: 40 },
     { k: 'props.cellBg', t: 'color', label: 'Cell background' }, { k: 'props.radius', t: 'range', label: 'Cell radius', min: 0, max: 60 }, { k: 'props.gap', t: 'range', label: 'Gap', min: 0, max: 80 },
     { k: 'props.showLabel', t: 'toggle', label: 'Labels' }, { k: 'props.label', t: 'seg', label: 'Label', options: [['dist', 'Distance'], ['day', 'Day + dist'], ['name', 'Name']] },
+    { k: 'props.treadmill', t: 'toggle', label: 'Show treadmill runs (no GPS)', when: (e) => e.props.design !== 'overlay' }, { k: 'props.treadmillLabel', t: 'text', label: 'Treadmill tag', when: (e) => e.props.treadmill !== false && e.props.design !== 'overlay' },
   ] }, { title: 'Label text', ts: 'props.labelTS' }],
 });
 

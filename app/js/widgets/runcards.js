@@ -3,6 +3,7 @@ import { register, progOf } from './core.js';
 import { TS, drawText, textBox, col, rrect, measureStr } from '../render/draw.js';
 import { fmtPace, fmtDuration, fmtDist, fmtInt, fmtElev, fmtDate, isNum, clamp, distUnit, paceUnit, elevUnit, DAYS, EASE } from '../util.js';
 import { routePoints } from './map.js';
+import { drawTreadmillArt } from '../render/treadmill.js';
 
 export const CARD_FIELDS = [['dist', 'Distance'], ['time', 'Time'], ['pace', 'Avg pace'], ['hr', 'Avg HR'], ['elev', 'Elev gain'], ['cad', 'Cadence'], ['cal', 'Calories'], ['maxhr', 'Max HR']];
 const PAL = ['#c6ff3d', '#00e0ff', '#ff6bd6', '#ffb020', '#8b5cf6', '#22c55e', '#f43f5e', '#38bdf8'];
@@ -27,8 +28,10 @@ function dayLabel(a, style) {
 }
 const scaleTS = (ts, k) => (k >= 0.999 ? ts : { ...ts, size: ts.size * k });
 
-function drawRoute(ctx, a, x, y, w, h, color, width, glow, f) {
-  const R = routePoints(a, 300); if (!R || w < 4 || h < 4) return;
+function drawRoute(ctx, a, x, y, w, h, color, width, glow, f, p) {
+  if (w < 4 || h < 4) return;
+  const R = a.hasGps ? routePoints(a, 300) : null;
+  if (!R) { if (p && p.treadmill === false) return; drawTreadmillArt(ctx, x + w * 0.06, y + h * 0.06, w * 0.88, h * 0.88, color, f, 1.1); return; }
   const sc = Math.min(w / Math.max(1, R.maxX - R.minX), h / Math.max(1, R.maxY - R.minY));
   const ox = x + w / 2 - ((R.minX + R.maxX) / 2) * sc, oy = y + h / 2 - ((R.minY + R.maxY) / 2) * sc;
   const n = Math.max(2, Math.floor(R.pts.length * f));
@@ -72,7 +75,7 @@ register({
   type: 'mcards', name: 'Run cards', auto: false, w: 940, h: 1100, modes: ['multi'],
   props: () => ({
     design: 'list', cols: 2, fields: ['dist', 'time', 'pace', 'hr'], statLabels: true, showUnits: true, fieldLabels: {},
-    showRoute: true, routeColor: '@accent', palette: false, routeWidth: 5, routeGlow: 0, routeBg: '#ffffff0d',
+    showRoute: true, treadmill: true, treadmillTag: 'Treadmill', routeColor: '@accent', palette: false, routeWidth: 5, routeGlow: 0, routeBg: '#ffffff0d',
     showName: true, showDate: true, dateStyle: 'dayDate', cardBg: '#ffffff14', radius: 22, gap: 18, pad: 26,
     accentBar: true, accent: '@accent', hlMode: 'longest', hlColor: '@accent', lineColor: '#ffffff33',
     nameTS: TS({ size: 34, weight: 800, font: 'Inter' }),
@@ -104,7 +107,7 @@ register({
       if (a === hlRun && p.hlColor) { ctx.save(); ctx.strokeStyle = col(p.hlColor, env); ctx.lineWidth = 3; rrect(ctx, x + 1.5, y + 1.5, cw - 3, ch - 3, p.radius); ctx.stroke(); ctx.restore(); }
       if (p.accentBar && design !== 'grid') { ctx.save(); ctx.fillStyle = col(p.accent, env); rrect(ctx, x, y + p.radius * 0.6, 6, ch - p.radius * 1.2, 3); ctx.fill(); ctx.restore(); }
       const pad = Math.min(p.pad, ch * 0.16, cw * 0.1);
-      const nameS = a.name, dateS = dayLabel(a, design === 'timeline' && p.dateStyle === 'dayDate' ? 'short' : p.dateStyle);
+      const nameS = a.name, dateS = (!a.hasGps && p.treadmillTag ? p.treadmillTag + ' · ' : '') + dayLabel(a, design === 'timeline' && p.dateStyle === 'dayDate' ? 'short' : p.dateStyle);
       if (design === 'grid') {
         // route on top, then name/date, then stats (2 per row)
         const half = Math.ceil((p.fields || []).length / 2);
@@ -113,8 +116,8 @@ register({
         const routeH = p.showRoute ? Math.max(0, ch - 2 * pad - need - 14) : 0;
         const k = Math.min(clamp((ch - 2 * pad - (p.showRoute ? Math.min(routeH, cw * 0.3) + 14 : 0)) / need, 0.45, 1.5), fitK(ctx, sub, list, (cw - 2 * pad) / Math.max(1, sub.fields.length), env.units));
         let yy = y + pad;
-        if (p.showRoute && routeH > 30) { if (p.routeBg) { ctx.fillStyle = col(p.routeBg, env); rrect(ctx, x + pad, yy, cw - 2 * pad, routeH, p.radius * 0.6); ctx.fill(); } drawRoute(ctx, a, x + pad + 10, yy + 10, cw - 2 * pad - 20, routeH - 20, routeCol, p.routeWidth, p.routeGlow, f); yy += routeH + 14; }
-        if (p.showDate) { const b = textBox(ctx, dateS, scaleTS(p.dateTS, k)); drawText(ctx, dateS, x + pad, yy + b.asc, scaleTS(p.dateTS, k), env); yy += b.h + 10 * k; }
+        if (p.showRoute && routeH > 30) { if (p.routeBg) { ctx.fillStyle = col(p.routeBg, env); rrect(ctx, x + pad, yy, cw - 2 * pad, routeH, p.radius * 0.6); ctx.fill(); } drawRoute(ctx, a, x + pad + 10, yy + 10, cw - 2 * pad - 20, routeH - 20, routeCol, p.routeWidth, p.routeGlow, f, p); yy += routeH + 14; }
+        if (p.showDate) { const b = textBox(ctx, dateS, scaleTS(p.dateTS, k)); drawText(ctx, fitStr(ctx, dateS, scaleTS(p.dateTS, k), cw - 2 * pad), x + pad, yy + b.asc, scaleTS(p.dateTS, k), env); yy += b.h + 10 * k; }
         if (p.showName) { const t = scaleTS(p.nameTS, k); const b = textBox(ctx, nameS, t); drawText(ctx, fitStr(ctx, nameS, t, cw - 2 * pad), x + pad, yy + b.asc, t, env); yy += b.h + 14 * k; }
         yy += statRow(ctx, sub, a, x + pad, yy, cw - 2 * pad, k, env, 'left') + 12 * k;
         if (sub2.fields.length) statRow(ctx, sub2, a, x + pad, yy, cw - 2 * pad, k, env, 'left');
@@ -123,14 +126,14 @@ register({
         const compact = design === 'compact';
         const rs = p.showRoute ? ch - 2 * pad : 0;
         const tx = x + pad + (p.accentBar ? 8 : 0) + (rs > 20 ? rs + pad : 0), tw = x + cw - pad - tx;
-        if (rs > 20) { if (p.routeBg) { ctx.fillStyle = col(p.routeBg, env); rrect(ctx, x + pad + (p.accentBar ? 8 : 0), y + pad, rs, rs, p.radius * 0.6); ctx.fill(); } drawRoute(ctx, a, x + pad + (p.accentBar ? 8 : 0) + 8, y + pad + 8, rs - 16, rs - 16, routeCol, p.routeWidth, p.routeGlow, f); }
+        if (rs > 20) { if (p.routeBg) { ctx.fillStyle = col(p.routeBg, env); rrect(ctx, x + pad + (p.accentBar ? 8 : 0), y + pad, rs, rs, p.radius * 0.6); ctx.fill(); } drawRoute(ctx, a, x + pad + (p.accentBar ? 8 : 0) + 8, y + pad + 8, rs - 16, rs - 16, routeCol, p.routeWidth, p.routeGlow, f, p); }
         const headH = (p.showName ? textBox(ctx, 'Ag', p.nameTS).h : 0) + (p.showDate ? textBox(ctx, 'A', p.dateTS).h + 8 : 0);
         if (compact) {
           // one line: date · name on the left, stats on the right
           const sw = tw * 0.64;
           const k = Math.min(clamp((ch - 2 * pad) / Math.max(headH, statRowH(ctx, p, 1)), 0.4, 1.4), fitK(ctx, p, list, sw / Math.max(1, (p.fields || []).length), env.units));
           let yy = y + (ch - headH * k) / 2;
-          if (p.showDate) { const t = scaleTS(p.dateTS, k), b = textBox(ctx, dateS, t); drawText(ctx, dateS, tx, yy + b.asc, t, env); yy += b.h + 8 * k; }
+          if (p.showDate) { const t = scaleTS(p.dateTS, k), b = textBox(ctx, dateS, t); drawText(ctx, fitStr(ctx, dateS, t, tw - sw - 20), tx, yy + b.asc, t, env); yy += b.h + 8 * k; }
           if (p.showName) { const t = scaleTS(p.nameTS, k), b = textBox(ctx, nameS, t); drawText(ctx, fitStr(ctx, nameS, t, tw - sw - 20), tx, yy + b.asc, t, env); }
           statRow(ctx, p, a, x + cw - pad - sw, y + (ch - statRowH(ctx, p, k)) / 2, sw, k, env);
         } else {
@@ -138,7 +141,7 @@ register({
           const k = Math.min(clamp((ch - 2 * pad) / need, 0.4, 1.8), fitK(ctx, p, list, tw / Math.max(1, (p.fields || []).length), env.units));
           let yy = y + pad;
           const kh = clamp((ch - 2 * pad - statRowH(ctx, p, k) - 16) / Math.max(1, headH), k, 1.9); // header can grow into spare room
-          if (p.showDate) { const t = scaleTS(p.dateTS, kh), b = textBox(ctx, dateS, t); drawText(ctx, dateS, tx, yy + b.asc, t, env); yy += b.h + 8 * kh; }
+          if (p.showDate) { const t = scaleTS(p.dateTS, kh), b = textBox(ctx, dateS, t); drawText(ctx, fitStr(ctx, dateS, t, tw), tx, yy + b.asc, t, env); yy += b.h + 8 * kh; }
           if (p.showName) { const t = scaleTS(p.nameTS, kh), b = textBox(ctx, nameS, t); drawText(ctx, fitStr(ctx, nameS, t, tw), tx, yy + b.asc, t, env); }
           statRow(ctx, p, a, tx, y + ch - pad - statRowH(ctx, p, k), tw, k, env, 'left');
         }
@@ -157,7 +160,8 @@ register({
       { k: 'props.hlMode', t: 'seg', label: 'Highlight', options: [['longest', 'Longest'], ['fastest', 'Fastest'], ['none', 'None']] },
     ] },
     { title: 'Route', fields: [
-      { k: 'props.showRoute', t: 'toggle', label: 'Show route' }, { k: 'props.routeColor', t: 'color', label: 'Route color' }, { k: 'props.palette', t: 'toggle', label: 'Different color per run' },
+      { k: 'props.showRoute', t: 'toggle', label: 'Show route' }, { k: 'props.treadmill', t: 'toggle', label: 'Treadmill picture for runs without GPS' },
+      { k: 'props.treadmillTag', t: 'text', label: 'Tag before date for treadmill runs', placeholder: 'empty = no tag' }, { k: 'props.routeColor', t: 'color', label: 'Route color' }, { k: 'props.palette', t: 'toggle', label: 'Different color per run' },
       { k: 'props.routeWidth', t: 'range', label: 'Line width', min: 1, max: 14, step: 0.5 }, { k: 'props.routeGlow', t: 'range', label: 'Glow', min: 0, max: 30 }, { k: 'props.routeBg', t: 'color', label: 'Route background' },
     ] },
     { title: 'Card style', fields: [
