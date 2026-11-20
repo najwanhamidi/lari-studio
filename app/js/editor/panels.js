@@ -377,6 +377,7 @@ function build() {
   const ds = designSec(els); if (ds) root.append(ds);
   if (sameType && def.schema) {
     for (const s of def.schema(els[0], env)) {
+      if (s.when && !s.when(els[0])) continue;
       if (s.ts) { root.append(section(s.title, tsFields(s.ts, els), { key: def.type + s.title, open: false })); continue; }
       const box = el('div');
       for (const f of s.fields) { if (f.when && !f.when(els[0])) continue; box.append(field(f, els)); }

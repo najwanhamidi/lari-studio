@@ -4,6 +4,7 @@ import { deepMerge, clone } from '../util.js';
 import { MORE_SINGLE, MORE_MULTI } from './more.js';
 import { EXTRA_SINGLE, EXTRA_MULTI } from './extra.js';
 import { PACK4_SINGLE, PACK4_MULTI } from './pack4.js';
+import { PACK5_SINGLE, PACK5_MULTI } from './pack5.js';
 
 function kit(doc, env, ctx) {
   const W = doc.w, H = doc.h;
@@ -26,7 +27,7 @@ function kit(doc, env, ctx) {
   const place = (el, ax, ay, x, y) => { el.x = x - el.w * ax; el.y = y - el.h * ay; return el; };
   const fitW = (el, maxW) => { if (el.w > maxW) { const k = maxW / el.w; if (REG[el.type].auto) el.s *= k; else { el.w *= k; el.h *= k; el.s *= k; } layoutElement(ctx, el, env); } return el; };
   const group = (els) => { const g = Math.random().toString(36).slice(2, 9); els.forEach((e) => (e.group = g)); };
-  return { W, H, u, M, mk, place, fitW, list, group, setDelay: (d) => (delay = d) };
+  return { W, H, u, M, mk, place, fitW, list, group, setDelay: (d) => (delay = d), env, ctx, relayout: (el) => layoutElement(ctx, el, env) };
 }
 const TS = (o) => o;
 
@@ -364,6 +365,9 @@ TEMPLATES.single.push(...EXTRA_SINGLE);
 TEMPLATES.multi.push(...EXTRA_MULTI);
 TEMPLATES.single.push(...PACK4_SINGLE);
 TEMPLATES.multi.push(...PACK4_MULTI);
+// newest first so the full-report templates are easy to find
+TEMPLATES.single.splice(1, 0, ...PACK5_SINGLE);
+TEMPLATES.multi.splice(1, 0, ...PACK5_MULTI);
 
 // Build a template into a doc
 export function buildTemplate(tpl, doc, env, ctx) {

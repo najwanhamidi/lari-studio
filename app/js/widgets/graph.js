@@ -1,6 +1,6 @@
 // Data graphs: pace / heart rate / elevation / cadence / power / speed.
 import { register, progOf, stateOf } from './core.js';
-import { TS, drawText, textBox, col, rrect, measureStr } from '../render/draw.js';
+import { TS, drawText, textBox, col, rrect, measureStr, luma } from '../render/draw.js';
 import { smoothSpeed, smoothSeries, fracIndex, getSplits } from '../data/activity.js';
 import { fmtPace, fmtElev, fmtSpeed, fmtInt, fmtDist, fmtDuration, isNum, clamp, rampColor, unitLen, distUnit, paceUnit, parseAxisVal, axisHint } from '../util.js';
 import { splitCfgOf } from './metrics.js';
@@ -69,6 +69,8 @@ register({
     showAvg: true, avgColor: '#ffffffcc', showMinMax: false, barGap: 0.25, barRadius: 6, bars: 30, yPad: 0.08, baseline: 'zero',
     cursor: true, cursorColor: '#ffffff', ghost: true, ghostOpacity: 0.18,
     splits: { mode: 'km', every: 1, custom: '' }, yMin: '', yMax: '', xMin: '', xMax: '',
+    splitLabels: false, splitLabelShow: 'value', splitLabelPos: 'top', splitLabelRot: 'auto', splitLabelBox: false, splitLabelBoxColor: '#000000aa',
+    splitLabelTS: TS({ size: 22, weight: 700, font: 'Inter' }),
     titleTS: TS({ size: 26, weight: 700, transform: 'upper', spacing: 2 }),
     axisTS: TS({ size: 20, weight: 500, role: 'muted', font: 'Inter' }),
     valueTS: TS({ size: 22, weight: 700, font: 'Inter', color: '#0d0f14', role: 'fixed' }),
@@ -103,8 +105,15 @@ register({
       { k: 'xrange', t: 'axis', label: 'X axis range', kMin: 'props.xMin', kMax: 'props.xMax', minLabel: 'From', maxLabel: 'To',
         hint: el.props.xAxis === 'time' ? 'In minutes or h:mm (e.g. 10 to 45, or 0:30 to 1:15). Zooms into part of the run.' : `In ${axisHint('dist', env && env.units)} (e.g. 2 to 8). Zooms into part of the run, or set past the end to leave space.` },
     ] },
+    { title: 'Split labels', when: (e) => /splitBars|step|lollipop/.test(e.props.design), fields: [
+      { k: 'props.splitLabels', t: 'toggle', label: 'Label every split' },
+      { k: 'props.splitLabelShow', t: 'seg', label: 'Show', options: [['value', 'Value'], ['valueUnit', 'Value + unit'], ['number', 'Split no.'], ['both', 'No. + value']], when: (e) => e.props.splitLabels },
+      { k: 'props.splitLabelPos', t: 'seg', label: 'Position', options: [['top', 'Above'], ['inside', 'Inside top'], ['base', 'At base']], when: (e) => e.props.splitLabels },
+      { k: 'props.splitLabelRot', t: 'seg', label: 'Direction', options: [['auto', 'Auto'], ['horizontal', 'Across'], ['vertical', 'Upright']], when: (e) => e.props.splitLabels },
+      { k: 'props.splitLabelBox', t: 'toggle', label: 'Label background', when: (e) => e.props.splitLabels }, { k: 'props.splitLabelBoxColor', t: 'color', label: 'Background color', when: (e) => e.props.splitLabels && e.props.splitLabelBox },
+    ] },
     { title: 'Animation extras', fields: [{ k: 'props.cursor', t: 'toggle', label: 'Moving cursor & value' }, { k: 'props.cursorColor', t: 'color', label: 'Cursor color' }, { k: 'props.ghost', t: 'toggle', label: 'Show upcoming part faintly' }, { k: 'props.ghostOpacity', t: 'range', label: 'Upcoming opacity', min: 0, max: 1, step: 0.05, when: (e) => e.props.ghost }] },
-    { title: 'Title text', ts: 'props.titleTS' }, { title: 'Axis text', ts: 'props.axisTS' }, { title: 'Cursor value text', ts: 'props.valueTS' },
+    { title: 'Title text', ts: 'props.titleTS' }, { title: 'Axis text', ts: 'props.axisTS' }, { title: 'Cursor value text', ts: 'props.valueTS' }, { title: 'Split label text', ts: 'props.splitLabelTS', when: (e) => /splitBars|step|lollipop/.test(e.props.design) },
   ],
 });
 
@@ -165,7 +174,8 @@ export function drawGraph(ctx, el, W, H, env) {
   const axs = p.axisTS;
   const yLabW = p.showY ? Math.max(measureStr(ctx, fmtMetric(metric, hi, units), axs), measureStr(ctx, fmtMetric(metric, lo, units), axs)) + axs.size * 0.6 : 0;
   const xLabH = p.showX ? axs.size * 1.6 : 0;
-  const px0 = yLabW, py0 = top + (p.cursor && P < 1 ? p.valueTS.size * 1.8 : axs.size * 0.4), pw = Math.max(10, W - px0), ph = Math.max(10, H - py0 - xLabH);
+  const labTop = isSplit && p.splitLabels && p.splitLabelPos === 'top' ? p.splitLabelTS.size * (p.splitLabelShow === 'both' ? 2.6 : 1.5) : 0;
+  const px0 = yLabW, py0 = top + Math.max(labTop, p.cursor && P < 1 ? p.valueTS.size * 1.8 : axs.size * 0.4), pw = Math.max(10, W - px0), ph = Math.max(10, H - py0 - xLabH);
   const Y = (v) => { const k = (v - lo) / (hi - lo); return py0 + ph - (inv ? 1 - k : k) * ph; };
   const X = (x) => px0 + ((x - xa) / (xb - xa)) * pw;
   const inX = (x) => x >= xa - 1e-9 && x <= xb + 1e-9;
@@ -218,6 +228,7 @@ export function drawGraph(ctx, el, W, H, env) {
     const av = isSplit ? avgOf(splits.map((s) => splitValue(s, metric))) : G.avg;
     if (isNum(av) && av >= lo && av <= hi) { const y = Y(av); ctx.save(); ctx.strokeStyle = col(p.avgColor, env); ctx.lineWidth = 2.5; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(px0, y); ctx.lineTo(px0 + pw, y); ctx.stroke(); ctx.restore(); }
   }
+  if (isSplit && p.splitLabels) drawSplitLabels(ctx, p, splits, metric, X, Y, baseY, xCur, xa, xb, lo, hi, env, act, xAxis, py0, ph, colorAt, lineCol, fillCol);
   if (p.showMinMax && !isSplit) {
     let bi = -1, wi = -1;
     for (let i = 0; i < G.N; i++) { const v = G.ys[i]; if (!isNum(v)) continue; if (bi < 0 || (metric === 'pace' ? v < G.ys[bi] : v > G.ys[bi])) bi = i; if (wi < 0 || (metric === 'pace' ? v > G.ys[wi] : v < G.ys[wi])) wi = i; }
@@ -303,6 +314,46 @@ function drawSeriesDesign(ctx, p, G, X, Y, baseY, py0, ph, limit, env, colorAt, 
 }
 function clampV(v, G, p) { return v; }
 
+// Static value label on every split bar (shown as soon as that bar has been drawn in the video).
+function drawSplitLabels(ctx, p, splits, metric, X, Y, baseY, xCur, xa, xb, lo, hi, env, act, xAxis, py0, ph, colorAt, lineCol, fillCol) {
+  const tot = xAxis === 'time' ? act.C.tt[act.n - 1] : act.C.d[act.n - 1];
+  const ts = p.splitLabelTS, units = env.units, inv = metric === 'pace' && p.invert;
+  const unit = metricUnit(metric, units);
+  splits.forEach((s, i) => {
+    const a = (xAxis === 'time' ? s.startT : s.startD) / tot, b = (xAxis === 'time' ? s.endT : s.endD) / tot, mid = (a + b) / 2;
+    if (mid > xCur + 1e-9 || mid < xa - 1e-9 || mid > xb + 1e-9) return;
+    const v = splitValue(s, metric); if (!isNum(v)) return;
+    const val = fmtMetric(metric, v, units) + (p.splitLabelShow === 'valueUnit' ? ' ' + unit.replace(/^\//, '/') : '');
+    const num = String(s.index ?? i + 1);
+    const lines = p.splitLabelShow === 'number' ? [num] : p.splitLabelShow === 'both' ? [num, val] : [val];
+    const x0 = X(a), x1 = X(b), cx = (x0 + x1) / 2, bw = Math.abs(x1 - x0) * (1 - (p.design === 'step' ? 0 : p.barGap));
+    const yv = Y(Math.max(lo, Math.min(hi, v)));
+    const top = p.design === 'step' || p.design === 'lollipop' ? yv : Math.min(yv, baseY);
+    const tw = Math.max(...lines.map((l) => measureStr(ctx, l, ts))), lh = ts.size * 1.15;
+    const rot = p.splitLabelRot === 'vertical' || (p.splitLabelRot === 'auto' && tw > bw * 1.02 && lines.length === 1);
+    const ext = rot ? tw : lh * lines.length; // extent along the bar
+    const pad = ts.size * 0.35;
+    let cy, pos = p.splitLabelPos;
+    const barH = Math.abs(baseY - top);
+    if (pos !== 'top' && p.design !== 'step' && barH < ext + pad * 2) pos = 'top'; // doesn't fit in the bar
+    if (p.design === 'step' && pos !== 'top' && barH < ext + pad * 2) pos = 'top';
+    let lts = ts;
+    if (pos !== 'top' && !p.splitLabelBox && p.design !== 'lollipop' && (ts.color === '@text' || !ts.color)) {
+      const bc = colorAt(v) || (s.fastest ? lineCol : fillCol);
+      lts = { ...ts, color: luma(typeof bc === 'string' ? bc : '#888888') > 0.55 ? '#0d0f14' : '#ffffff', shadow: false };
+    }
+    if (pos === 'inside') cy = top + pad + ext / 2 + (p.design === 'lollipop' ? Math.min(bw / 2, 18) : 0);
+    else if (pos === 'base') cy = baseY - pad - ext / 2;
+    else cy = top - pad - ext / 2 - (p.design === 'lollipop' ? Math.max(6, Math.min(bw / 2, 18)) : 0);
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (rot) ctx.rotate(-Math.PI / 2);
+    if (p.splitLabelBox) { const bwid = (rot ? tw : tw) + pad * 2, bh = (rot ? lh : lh * lines.length) + pad; ctx.fillStyle = col(p.splitLabelBoxColor, env); rrect(ctx, -bwid / 2, -bh / 2, bwid, bh, bh / 3); ctx.fill(); }
+    const asc = ts.size * 0.72;
+    lines.forEach((l, k) => { const yy = -(lh * lines.length) / 2 + lh * k + lh / 2 + asc / 2; drawText(ctx, l, 0, yy, k === 0 && lines.length > 1 ? { ...lts, opacity: (lts.opacity ?? 1) * 0.7 } : lts, env, 'center'); });
+    ctx.restore();
+  });
+}
 function drawSplitDesign(ctx, p, splits, metric, X, Y, baseY, limit, env, colorAt, lineCol, fillCol, act, xAxis) {
   const tot = xAxis === 'time' ? act.C.tt[act.n - 1] : act.C.d[act.n - 1];
   const d = p.design;

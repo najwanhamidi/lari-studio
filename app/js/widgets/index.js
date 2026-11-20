@@ -5,6 +5,7 @@ import './graph.js';
 import './map.js';
 import './splits.js';
 import './multi.js';
+import './runcards.js';
 export { REG } from './core.js';
 
 const T = (text, size, extra = {}) => ({ type: 'text', over: { props: { text, ts: { size, ...extra } } } });
@@ -36,7 +37,8 @@ export const LIBRARY = {
       { label: 'Km splits table', icon: 'flag', type: 'splits' },
       { label: 'Device laps table', icon: 'flag-triangle-right', type: 'splits', over: { props: { splits: { mode: 'laps' } } } },
       { label: 'Custom laps table', icon: 'repeat', type: 'splits', over: { props: { splits: { mode: 'dist', every: 2 } } } },
-      { label: 'Split pace bars', icon: 'chart-column', type: 'graph', over: { props: { design: 'splitBars', metric: 'pace', title: 'Split pace' } } },
+      { label: 'Split pace bars', icon: 'chart-column', type: 'graph', over: { props: { design: 'splitBars', metric: 'pace', title: 'Split pace', splitLabels: true } } },
+      { label: 'Lap pace bars', icon: 'chart-column', type: 'graph', over: { props: { design: 'splitBars', metric: 'pace', title: 'Lap pace', splitLabels: true, splitLabelShow: 'both', splits: { mode: 'laps' } } } },
       { label: 'Split HR bars', icon: 'chart-column', type: 'graph', over: { props: { design: 'splitBars', metric: 'hr', title: 'Split HR', colorMode: 'zones' } } },
       { label: 'Split highlight', icon: 'trophy', type: 'splitcard' },
       { label: 'Split progress', icon: 'milestone', type: 'progress', over: { props: { design: 'segments' } } },
@@ -78,6 +80,8 @@ export const LIBRARY = {
       { label: 'Run list', icon: 'flag', type: 'mlist' }, { label: 'Daily chart', icon: 'chart-column', type: 'mbars' },
       { label: 'Week strip', icon: 'calendar-days', type: 'mcal' }, { label: 'Per-run chart', icon: 'chart-no-axes-column', type: 'mchart' },
       { label: 'Routes', icon: 'map', type: 'mroutes' },
+      { label: 'Run cards', icon: 'route', type: 'mcards' }, { label: 'Run cards grid', icon: 'map', type: 'mcards', over: { props: { design: 'grid' } } },
+      { label: 'Run timeline', icon: 'milestone', type: 'mcards', over: { props: { design: 'timeline' } } }, { label: 'Run cards compact', icon: 'flag', type: 'mcards', over: { props: { design: 'compact', showRoute: false } } },
     ] },
   ],
   media: { cat: 'Media & shapes', items: [
