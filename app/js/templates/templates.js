@@ -6,6 +6,7 @@ import { EXTRA_SINGLE, EXTRA_MULTI } from './extra.js';
 import { PACK4_SINGLE, PACK4_MULTI } from './pack4.js';
 import { PACK5_SINGLE, PACK5_MULTI } from './pack5.js';
 import { PACK6_MULTI } from './pack6.js';
+import { WEEKLY_TEMPLATES } from './weekly.js';
 
 function kit(doc, env, ctx) {
   const W = doc.w, H = doc.h;
@@ -370,6 +371,7 @@ TEMPLATES.multi.push(...PACK4_MULTI);
 TEMPLATES.single.splice(1, 0, ...PACK5_SINGLE);
 TEMPLATES.multi.splice(1, 0, ...PACK5_MULTI);
 TEMPLATES.multi.splice(1, 0, ...PACK6_MULTI);
+TEMPLATES.weekly = WEEKLY_TEMPLATES;
 
 // Build a template into a doc
 export function buildTemplate(tpl, doc, env, ctx) {

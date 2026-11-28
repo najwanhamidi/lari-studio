@@ -7,8 +7,9 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 
 ## What it does
 
-**Two workspaces (tabs at the top)**
+**Three workspaces (tabs at the top)**
 - **Activity**: one run from a `.fit`, `.tcx`, `.gpx` (also `.fit.gz` / `.zip`).
+- **Weekly**: a training block of any number of weeks (1–52). Load one ZIP per week (or one ZIP with everything and it is split into calendar weeks), name each week and label it Base, Build, Training, Down week, Taper, Race week or a custom label with its own colour. Templates show the distance of every week, the phases, and block totals.
 - **Multi-run**: drop a ZIP of a week's (or any period's) runs → weekly stats overlay. Rename each run, include/exclude runs, set the period title.
 
 **Widgets** (each with many layouts × 21 backdrop styles)
@@ -21,6 +22,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 - **Axis ranges:** every widget with axes lets you set the range. Graphs have Y min/max (pace as `4:30`) and an X window in km/mi or minutes to zoom into part of the run. The daily chart, per-run chart, HR zone bars and gauge have their own scale min/max. Leave blank for automatic.
 - Route map (9 line styles incl. heat-by-pace/HR, start/finish markers, km markers, moving runner dot), HR zones (5 designs), gauge, progress bar/track, best efforts.
 - Multi-run: totals, **run cards** (one card per run with route, name, date and its stats; list, grid, timeline or compact), run list (toggle day/date/name/distance/time/pace/HR/elev/cadence columns), daily chart, week strip, per-run chart, routes gallery.
+- Weekly: weekly distance chart (bars, pills, stacked runs, lollipop, area, line, steps, horizontal; values, phase bands, peak trophy, average/target line, axis range), week table, week cards, phase timeline, training heatmap, phase legend; totals like average per week, peak week and change vs previous week.
 - Text (with data tokens like `{distance}`, `{avgPace}`, `{name}`), images, icon/emoji/badge stickers, shapes.
 
 **Editing**
@@ -31,7 +33,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 - Every widget: backdrop (none/solid/gradient), opacity, corner radius, padding, border (style/sides), drop shadow, blend mode, flip, rotation.
 - Zoom (buttons, Ctrl+wheel, pinch), undo/redo, duplicate, copy/paste, layers panel (reorder, hide, lock, rename), Trash with restore.
 - Theme colours: elements using theme swatches recolour together.
-- Templates: 70 for single runs, 51 for multi-run; save your own designs as templates.
+- Templates: 70 for single runs, 51 for multi-run, 19 for weekly blocks; save your own designs as templates.
 
 **Numbers** are always rounded down (10.299 km shows 10.29, a 5:33.9 pace shows 5:33), never up.
 
@@ -56,6 +58,7 @@ Make Instagram/TikTok-ready running overlays and animated videos from your own a
 6. On your phone open that link and choose **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). Desktop Chrome/Edge can also install it from the address bar.
 
 ## Versions
+- **v1.7** – new Weekly workspace with phase labels, 6 weekly widgets and 19 weekly templates. v1.6 kept on the `v7` branch.
 - **v1.6** – treadmill display for runs without GPS, 12 more multi-run templates with per-run details. v1.5 kept on the `v6` branch.
 - **v1.5** – split bar labels, Run cards widget, 14 full-report single-run templates (name, distance, avg pace, avg HR, time, map, laps table, split bars) and 9 per-run multi-run templates. v1.4 kept on the `v5` branch.
 - **v1.4** – 24 more templates (Newspaper, Terminal, Boarding Pass, Nutrition Label, Certificate, Map Poster, Level Complete, Sunrise, Neon Sign, Polaroid, Calendar Page, Blueprint, Duotone…). v1.3 kept on the `v4` branch.

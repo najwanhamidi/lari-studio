@@ -238,7 +238,7 @@ const DEFAULT_ITEMS_MULTI = ['distance', 'time', 'runs', 'avgPace', 'avgHr', 'as
 register({
   type: 'statgrid', name: 'Stat grid', auto: true, modes: ['single', 'multi'],
   props: (env) => {
-    const ids = env && env.mode === 'multi' ? DEFAULT_ITEMS_MULTI : DEFAULT_ITEMS_SINGLE;
+    const ids = env && env.mode === 'multi' ? DEFAULT_ITEMS_MULTI : env && env.mode === 'weekly' ? ['distance', 'avgWeek', 'peak', 'weeks', 'runs', 'time', 'avgPace', 'longest'] : DEFAULT_ITEMS_SINGLE;
     return {
       items: ids.map((m, i) => ({ m, on: i < 4, label: '' })), cols: 2, layout: 'classic', align: 'left', gap: 4, cellGapX: 56, cellGapY: 36,
       dividers: false, dividerColor: '#ffffff33', showLabel: true, showUnit: true, iconColor: '@accent', iconScale: 1, accent: '@accent', decimals: 2, timeStyle: 'auto', unitPos: 'baseline',

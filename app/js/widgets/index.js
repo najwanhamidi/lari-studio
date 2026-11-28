@@ -6,6 +6,7 @@ import './map.js';
 import './splits.js';
 import './multi.js';
 import './runcards.js';
+import './weekly.js';
 export { REG } from './core.js';
 
 const T = (text, size, extra = {}) => ({ type: 'text', over: { props: { text, ts: { size, ...extra } } } });
@@ -82,6 +83,36 @@ export const LIBRARY = {
       { label: 'Routes', icon: 'map', type: 'mroutes' },
       { label: 'Run cards', icon: 'route', type: 'mcards' }, { label: 'Run cards grid', icon: 'map', type: 'mcards', over: { props: { design: 'grid' } } },
       { label: 'Run timeline', icon: 'milestone', type: 'mcards', over: { props: { design: 'timeline' } } }, { label: 'Run cards compact', icon: 'flag', type: 'mcards', over: { props: { design: 'compact', showRoute: false } } },
+    ] },
+  ],
+  weekly: [
+    { cat: 'Weekly charts', items: [
+      { label: 'Weekly distance', icon: 'chart-column', type: 'wchart' },
+      { label: 'Weekly line', icon: 'chart-line', type: 'wchart', over: { props: { design: 'area' } } },
+      { label: 'Weekly steps', icon: 'chart-column', type: 'wchart', over: { props: { design: 'step' } } },
+      { label: 'Horizontal weeks', icon: 'chart-no-axes-column', type: 'wchart', over: { props: { design: 'hbars', phaseLabels: 'each' }, h: 900 } },
+      { label: 'Weekly time', icon: 'timer', type: 'wchart', over: { props: { metric: 'time' } } },
+      { label: 'Phase timeline', icon: 'milestone', type: 'wphase' },
+      { label: 'Training heatmap', icon: 'calendar-days', type: 'wheat' },
+      { label: 'Phase legend', icon: 'flag', type: 'wlegend' },
+    ] },
+    { cat: 'Weeks', items: [
+      { label: 'Week table', icon: 'flag', type: 'wtable' }, { label: 'Week cards', icon: 'calendar', type: 'wcards' },
+      { label: 'Week list', icon: 'calendar', type: 'wcards', over: { props: { design: 'list' } } },
+    ] },
+    { cat: 'Text', items: [
+      { label: 'Title', icon: 'hash', ...T('{title}', 110, { font: 'Bebas Neue', weight: 400, spacing: 3 }) },
+      { label: 'Period dates', icon: 'calendar', ...T('{range}', 36, { weight: 600, color: '@muted', role: 'muted' }) },
+      { label: 'Block summary', icon: 'sparkles', ...T('{weeks} weeks · {distance} {unit}', 48, { weight: 700 }) },
+      { label: 'Paragraph', icon: 'hash', type: 'text', over: { props: { text: 'Notes about this block', ts: { size: 36, weight: 400 } } } },
+    ] },
+    { cat: 'Totals', items: [
+      { label: 'Total distance', icon: 'route', ...S('distance') }, { label: 'Avg per week', icon: 'chart-column', ...S('avgWeek') },
+      { label: 'Peak week', icon: 'trophy', ...S('peak') }, { label: 'Last week', icon: 'calendar', ...S('lastWeek') },
+      { label: 'Weeks', icon: 'calendar-days', ...S('weeks') }, { label: 'Runs', icon: 'footprints', ...S('runs') },
+      { label: 'Total time', icon: 'timer', ...S('time') }, { label: 'Avg pace', icon: 'gauge', ...S('avgPace') },
+      { label: 'Longest run', icon: 'medal', ...S('longest') }, { label: 'Change vs prev week', icon: 'trending-up', ...S('growth') },
+      { label: 'Stat grid', icon: 'chart-no-axes-column', type: 'statgrid' },
     ] },
   ],
   media: { cat: 'Media & shapes', items: [

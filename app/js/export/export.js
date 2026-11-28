@@ -8,7 +8,7 @@ import { zipSync } from '../../vendor/fflate.js';
 
 function fileBase() {
   const d = App.doc;
-  const n = d.mode === 'multi' ? (d.title || 'weekly') : (App.act?.name || 'run');
+  const n = d.mode === 'multi' ? (d.title || 'weekly') : d.mode === 'weekly' ? (d.title || 'training-block') : (App.act?.name || 'run');
   return ('lari-' + n).replace(/[^\w\-]+/g, '-').replace(/-+/g, '-').toLowerCase();
 }
 export function renderFrame(doc, scale, time, bgOverride, canvas) {

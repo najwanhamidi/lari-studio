@@ -1,6 +1,7 @@
 // App bootstrap: wiring, keyboard shortcuts, autosave, project files.
 import './widgets/index.js';
-import { App, on, emit, commit, undo, redo, canUndo, canRedo, setSel, selected, deleteSelected, duplicateSelected, resetHistory, layoutAll, newDoc, addAsset, addElement, usedAssets, invalidateMulti, setTextSel } from './editor/state.js';
+import { App, on, emit, commit, undo, redo, canUndo, canRedo, setSel, selected, deleteSelected, duplicateSelected, resetHistory, layoutAll, newDoc, addAsset, addElement, usedAssets, invalidateMulti, invalidateWeekly, setTextSel } from './editor/state.js';
+import { newWeekly } from './data/weekly.js';
 import { initStage, fitZoom, setZoom, view, nudge, requestRender, openInlineEditor } from './editor/stage.js';
 import { initPanels, ensureFontsLoaded } from './editor/panels.js';
 import { initSidebar, showTab, handleFiles, applyTemplate } from './editor/sidebar.js';
@@ -24,7 +25,8 @@ async function boot() {
     App.mode = 'multi'; applyTemplate(TEMPLATES.multi[0]);
     App.mode = 'single';
   }
-  for (const m of ['single', 'multi']) resetHistory(m);
+  if (!App.docs.weekly || !App.docs.weekly.elements.length) { const m = App.mode; App.docs.weekly = App.docs.weekly || newDoc('weekly'); App.mode = 'weekly'; applyTemplate(TEMPLATES.weekly[0]); App.mode = m; }
+  for (const m of ['single', 'multi', 'weekly']) resetHistory(m);
   initStage(); initPanels(); initSidebar(); initTimeline();
   wireTop(); wireKeys(); wireDrop(); wireMobile();
   setMode(App.mode, true);
@@ -178,8 +180,8 @@ function openMenu() {
 export async function saveProject() {
   const assets = {};
   for (const d of Object.values(App.docs)) for (const id of usedAssets(d)) if (App.assetSrc[id]) assets[id] = App.assetSrc[id];
-  const proj = { app: 'lari-studio', v: 1, docs: App.docs, settings: App.settings, assets, fonts: App.fontSrc, act: App.act ? actToJSON(App.act) : null, acts: App.acts.map((a) => ({ ...actToJSON(a), enabled: a.enabled })) };
-  await saveBlob(new Blob([JSON.stringify(proj)], { type: 'application/json' }), (App.act?.name || 'design').replace(/[^\w-]+/g, '-') + '.lari');
+  const proj = { app: 'lari-studio', v: 1, docs: App.docs, settings: App.settings, assets, fonts: App.fontSrc, act: App.act ? actToJSON(App.act) : null, acts: App.acts.map((a) => ({ ...actToJSON(a), enabled: a.enabled })), weekly: App.weekly };
+  await saveBlob(new Blob([JSON.stringify(proj)], { type: 'application/json' }), (App.mode === 'weekly' ? App.docs.weekly.title || 'training-block' : App.act?.name || 'design').replace(/[^\w-]+/g, '-') + '.lari');
 }
 function openProject() {
   const inp = el('input', { type: 'file' });
@@ -189,9 +191,10 @@ function openProject() {
       if (p.app !== 'lari-studio') throw new Error('Not a Lari project');
       for (const [id, src] of Object.entries(p.assets || {})) addAsset(src, id);
       for (const [n, u] of Object.entries(p.fonts || {})) await registerFont(n, u);
-      App.docs = p.docs; Object.assign(App.settings, p.settings || {});
+      App.docs = { ...p.docs, weekly: p.docs.weekly || App.docs.weekly || newDoc('weekly') }; Object.assign(App.settings, p.settings || {});
       App.act = p.act ? actFromJSON(p.act) : null; App.acts = (p.acts || []).map(actFromJSON); invalidateMulti();
-      for (const m of ['single', 'multi']) resetHistory(m);
+      if (p.weekly) App.weekly = p.weekly; invalidateWeekly();
+      for (const m of ['single', 'multi', 'weekly']) resetHistory(m);
       setMode(App.mode); emit('data'); ensureFontsLoaded(); toast('Project opened');
     } catch (e) { toast('Could not open: ' + e.message, 'err'); }
   };
@@ -218,7 +221,7 @@ function pickFont() {
 const autosave = debounce(async () => {
   const assets = {};
   for (const d of Object.values(App.docs)) for (const id of usedAssets(d)) if (App.assetSrc[id]) assets[id] = App.assetSrc[id];
-  await kvSet('state', { v: 1, mode: App.mode, docs: App.docs, assets, fonts: App.fontSrc, act: packAct(App.act), acts: App.acts.map(packAct) });
+  await kvSet('state', { v: 1, mode: App.mode, docs: App.docs, assets, fonts: App.fontSrc, act: packAct(App.act), acts: App.acts.map(packAct), weekly: App.weekly });
 }, 1200);
 async function restore() {
   try {
@@ -226,8 +229,9 @@ async function restore() {
     if (!s || !s.docs) return false;
     for (const [id, src] of Object.entries(s.assets || {})) addAsset(src, id);
     for (const [n, u] of Object.entries(s.fonts || {})) await registerFont(n, u);
-    App.docs = { single: s.docs.single || newDoc('single'), multi: s.docs.multi || newDoc('multi') };
+    App.docs = { single: s.docs.single || newDoc('single'), multi: s.docs.multi || newDoc('multi'), weekly: s.docs.weekly || newDoc('weekly') };
     App.act = unpackAct(s.act); App.acts = (s.acts || []).map(unpackAct);
+    if (s.weekly && Array.isArray(s.weekly.weeks)) App.weekly = s.weekly;
     App.mode = s.mode || 'single';
     return App.docs.single.elements.length + App.docs.multi.elements.length > 0;
   } catch (e) { console.warn('restore failed', e); return false; }

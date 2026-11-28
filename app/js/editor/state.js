@@ -3,6 +3,7 @@ import { clone, uid, getPath } from '../util.js';
 import { REG, layoutElement, makeElement } from '../widgets/core.js';
 import { stateAt, buildActivity, sampleRaw } from '../data/activity.js';
 import { multiStats, multiStateAt } from '../data/multi.js';
+import { weeklyStats, weeklyStateAt, newWeekly, sampleWeekly } from '../data/weekly.js';
 
 export const THEMES = [
   { name: 'Lime', text: '#ffffff', muted: '#ffffffb3', accent: '#c6ff3d', accent2: '#00e0ff' },
@@ -28,15 +29,16 @@ export function newDoc(mode) {
     theme: { ...THEMES[0] }, elements: [], trash: [],
     grid: { show: false, snap: false, size: 40, guides: true },
     video: { intro: 1.2, duration: 8, hold: 2.5, fps: 30, by: 'time' },
-    title: mode === 'multi' ? 'Weekly Recap' : '',
+    title: mode === 'multi' ? 'Weekly Recap' : mode === 'weekly' ? 'Training Block' : '',
   };
 }
 
 const listeners = new Set();
 export const App = {
   mode: 'single',
-  docs: { single: newDoc('single'), multi: newDoc('multi') },
-  hist: { single: { stack: [], idx: -1 }, multi: { stack: [], idx: -1 } },
+  docs: { single: newDoc('single'), multi: newDoc('multi'), weekly: newDoc('weekly') },
+  hist: { single: { stack: [], idx: -1 }, multi: { stack: [], idx: -1 }, weekly: { stack: [], idx: -1 } },
+  weekly: newWeekly(), sampleWeekly: null,
   act: null, acts: [], sample: null, sampleActs: null,
   settings: { units: 'metric', maxHr: 0, zonePct: [50, 60, 70, 80, 90], h24: true, weekStart: 1, rangeFromRuns: false },
   sel: [], tsel: null, tselScope: 'one', assets: {}, assetSrc: {},
@@ -60,7 +62,17 @@ export function getSampleActs() {
 }
 export function currentAct() { return App.act || getSampleAct(); }
 export function currentActs() { return App.acts.length ? App.acts : getSampleActs(); }
-export function usingSample() { return App.mode === 'single' ? !App.act : !App.acts.length; }
+export function usingSample() { return App.mode === 'single' ? !App.act : App.mode === 'weekly' ? !weeklyHasData() : !App.acts.length; }
+export function weeklyHasData() { return App.weekly.weeks.slice(0, App.weekly.count).some((w) => w.runs && w.runs.length); }
+export function currentWeeklyModel() { if (weeklyHasData()) return App.weekly; if (!App.sampleWeekly) App.sampleWeekly = sampleWeekly(); return App.sampleWeekly; }
+let wCache = null, wKey = '';
+export function currentWeekly() {
+  const W = currentWeeklyModel();
+  const key = JSON.stringify([W === App.weekly, W.count, W.phaseNames, W.phaseColors, W.weeks.slice(0, W.count).map((w) => [w.id, w.name, w.phase, w.custom, w.customColor, w.start, (w.runs || []).length, (w.runs || []).reduce((a, r) => a + (r.distance || 0), 0)]), App.settings.weekStart]);
+  if (key !== wKey) { wCache = weeklyStats(W, { weekStart: App.settings.weekStart }); wKey = key; }
+  return wCache;
+}
+export function invalidateWeekly() { wKey = ''; }
 
 let multiCache = null, multiKey = '';
 export function currentMulti() {
@@ -88,6 +100,10 @@ export function makeEnv(doc, opts = {}) {
     env.act = act;
     env.fin = stateAt(act, 1, v.by);
     env.cur = isStatic ? env.fin : stateAt(act, t, v.by);
+  } else if (mode === 'weekly') {
+    const S = currentWeekly();
+    env.weekly = S; env.wfin = S; env.wcur = isStatic ? S : weeklyStateAt(S, t);
+    env.act = null;
   } else {
     const S = currentMulti();
     env.multi = S; env.mfin = multiStateAt(S, 1); env.mcur = isStatic ? env.mfin : multiStateAt(S, t);

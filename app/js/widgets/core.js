@@ -108,6 +108,7 @@ export function entranceState(el, env) {
 export function stateOf(el, env) {
   const live = el.anim?.data !== false && !env.static;
   if (env.mode === 'multi') return live ? env.mcur : env.mfin;
+  if (env.mode === 'weekly') return live ? env.wcur : env.wfin;
   return live ? env.cur : env.fin;
 }
 export function progOf(el, env) { return el.anim?.data !== false && !env.static ? env.t : 1; }

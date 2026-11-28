@@ -1,11 +1,12 @@
 // Left sidebar: Data, Templates, Add, Layers, Trash.
-import { App, on, emit, commit, setSel, addElement, restoreTrash, makeEnv, layoutAll, currentAct, currentActs, usingSample, invalidateMulti, addAsset, resetHistory, newDoc, THEMES } from './state.js';
+import { App, on, emit, commit, setSel, addElement, restoreTrash, makeEnv, layoutAll, currentAct, currentActs, usingSample, invalidateMulti, invalidateWeekly, currentWeekly, addAsset, resetHistory, newDoc, THEMES } from './state.js';
+import { PHASES, ensureWeeks, newWeek, summarizeAct, splitIntoWeeks } from '../data/weekly.js';
 import { REG, renderScene } from '../widgets/core.js';
 import { LIBRARY } from '../widgets/index.js';
 import { TEMPLATES, buildTemplate, templateDocPatch } from '../templates/templates.js';
 import { loadFiles } from '../data/loader.js';
 import { el, clone, fmtDist, fmtDuration, fmtPace, fmtDate, fmtInt, distUnit, paceUnit, readFileAs, deepMerge, uid } from '../util.js';
-import { section, row, textInput, numInput, select, seg, toggle, button, iconCanvas, toast, modal } from './ui.js';
+import { section, row, textInput, numInput, select, seg, toggle, button, iconCanvas, toast, modal, colorInput } from './ui.js';
 import { moveLayer } from './actions.js';
 import { fitZoom } from './stage.js';
 import { ensureFontsLoaded } from './panels.js';
@@ -43,6 +44,7 @@ function fileInput(multiple, onFiles) {
   return inp;
 }
 export async function handleFiles(files) {
+  if (App.mode === 'weekly') return weeklyDrop(files);
   const busy = el('div', { class: 'busy' }, 'Reading files…'); document.body.append(busy);
   try {
     const { activities, errors } = await loadFiles(files);
@@ -90,7 +92,7 @@ function settingsBox() {
   box.append(row('Max heart rate', numInput(s.maxHr || '', (v, fin) => fin && upd('maxHr', v), { min: 0, max: 240, placeholder: 'auto' }), { half: true }));
   box.append(row('24-hour clock', toggle(s.h24, (v) => upd('h24', v)), { half: true }));
   box.append(row('HR zone limits (% of max)', el('div', { class: 'list5' }, s.zonePct.map((p, i) => numInput(p, (v, fin) => { if (!fin) return; const a = [...s.zonePct]; a[i] = v; upd('zonePct', a); }, { min: 30, max: 100 })))), { stack: true });
-  if (App.mode === 'multi') {
+  if (App.mode === 'multi' || App.mode === 'weekly') {
     box.append(row('Week starts on', seg(String(s.weekStart), [['1', 'Monday'], ['0', 'Sunday']], (v) => upd('weekStart', +v))));
     box.append(row('Date range from', seg(s.rangeFromRuns ? 'runs' : 'week', [['week', 'Calendar week'], ['runs', 'First–last run']], (v) => upd('rangeFromRuns', v === 'runs'))));
   }
@@ -99,6 +101,7 @@ function settingsBox() {
 }
 function dataTab() {
   const u = App.settings.units;
+  if (App.mode === 'weekly') { weeklyDataTab(); root.append(settingsBox()); return; }
   if (App.mode === 'single') {
     root.append(dropZone(false));
     const a = currentAct();
@@ -133,6 +136,121 @@ function dataTab() {
   root.append(settingsBox());
 }
 const kv = (k, v) => el('div', {}, el('span', {}, k), el('b', {}, v));
+
+// ---------- Weekly data ----------
+const weeklyChanged = (rebuild = true) => { invalidateWeekly(); layoutAll(); emit('doc'); if (rebuild) emit('data'); };
+async function readRuns(files) {
+  const busy = el('div', { class: 'busy' }, 'Reading files…'); document.body.append(busy);
+  try {
+    const { activities, errors } = await loadFiles(files);
+    errors.forEach((e) => toast(e, 'err'));
+    return activities.map(summarizeAct);
+  } finally { busy.remove(); }
+}
+async function loadWeekSlot(i, files) {
+  const runs = await readRuns(files);
+  if (!runs.length) { toast('No runs found in that file', 'err'); return; }
+  const W = App.weekly; ensureWeeks(W);
+  const seen = new Set(), uniq = runs.filter((r) => { const k = r.start + ':' + Math.round(r.distance); if (seen.has(k)) return false; seen.add(k); return true; });
+  W.weeks[i].runs = uniq; W.weeks[i].start = null;
+  const t = uniq.map((r) => new Date(r.start).getTime()), span = (Math.max(...t) - Math.min(...t)) / 86400000;
+  toast(`Week ${i + 1}: ${uniq.length} run${uniq.length === 1 ? '' : 's'} loaded` + (span > 7.5 ? ` — these runs span ${Math.ceil(span / 7)} weeks; use “Load all weeks from one ZIP” to split them` : ''), span > 7.5 ? 'err' : undefined);
+  weeklyChanged();
+}
+async function weeklyDrop(files) {
+  const runs = await readRuns(files);
+  if (!runs.length) { toast('No runs found', 'err'); return; }
+  const groups = splitIntoWeeks(runs, App.settings.weekStart), W = App.weekly; ensureWeeks(W);
+  if (groups.length > 1 && !W.weeks.slice(0, W.count).some((w) => w.runs && w.runs.length)) return loadAllWeeksFrom(runs);
+  let i = W.weeks.slice(0, W.count).findIndex((w) => !w.runs || !w.runs.length);
+  for (const g of groups) {
+    if (i < 0 || i >= W.count) { if (W.count >= 52) break; W.count++; ensureWeeks(W); i = W.count - 1; }
+    W.weeks[i].runs = g.runs; W.weeks[i].start = g.start.toISOString();
+    toast(`Week ${i + 1}: ${g.runs.length} run${g.runs.length === 1 ? '' : 's'} loaded`);
+    i = W.weeks.slice(0, W.count).findIndex((w) => !w.runs || !w.runs.length);
+  }
+  weeklyChanged();
+}
+async function loadAllWeeks(files) { const runs = await readRuns(files); if (!runs.length) { toast('No runs found', 'err'); return; } return loadAllWeeksFrom(runs); }
+async function loadAllWeeksFrom(runs) {
+  const groups = splitIntoWeeks(runs, App.settings.weekStart);
+  const W = App.weekly;
+  W.count = Math.min(52, Math.max(1, groups.length)); ensureWeeks(W);
+  groups.slice(0, 52).forEach((g, i) => { W.weeks[i].runs = g.runs; W.weeks[i].start = g.start.toISOString(); });
+  for (let i = groups.length; i < W.weeks.length; i++) { W.weeks[i].runs = []; W.weeks[i].start = null; }
+  toast(`Split ${runs.length} runs into ${W.count} week${W.count === 1 ? '' : 's'}` + (groups.length > 52 ? ' (first 52 kept)' : ''));
+  weeklyChanged();
+}
+// quick phase plans for N weeks
+function phasePlan(kind, n) {
+  if (kind === 'all') return Array(n).fill('training');
+  if (kind === 'cycle') return Array.from({ length: n }, (_, i) => ((i + 1) % 4 === 0 ? 'down' : 'build'));
+  // race block: ~25% base, build with every 4th week down, 2 taper (1 if short), race week last
+  const out = [], taper = n >= 8 ? 2 : n >= 4 ? 1 : 0, race = n >= 2 ? 1 : 0, basen = Math.floor((n - taper - race) * 0.25);
+  for (let i = 0; i < basen; i++) out.push('base');
+  for (let i = basen, k = 1; i < n - taper - race; i++, k++) out.push(k % 4 === 0 ? 'down' : k > (n - taper - race - basen) * 0.6 ? 'training' : 'build');
+  for (let i = 0; i < taper; i++) out.push('taper');
+  if (race) out.push('race');
+  return out.slice(0, n);
+}
+function weeklyDataTab() {
+  const W = App.weekly, u = App.settings.units, d = App.doc;
+  ensureWeeks(W);
+  const S = currentWeekly();
+  const allInp = fileInput(true, loadAllWeeks);
+  const top = el('div', { class: 'act-card' });
+  top.append(row('Block title', textInput(d.title, (v, fin) => { d.title = v; commit('Title', fin ? 0 : 500); }), { stack: true }));
+  top.append(row('Number of weeks', numInput(W.count, (v, fin) => { if (!fin) return; W.count = Math.max(1, Math.min(52, Math.round(v) || 1)); ensureWeeks(W); weeklyChanged(); }, { min: 1, max: 52 }), { half: true }),
+    row('', el('div', { class: 'btnrow' }, ...[4, 8, 12, 16].map((k) => button(String(k), () => { W.count = k; ensureWeeks(W); weeklyChanged(); }, 'tiny' + (W.count === k ? ' on' : '')))), { half: true }));
+  top.append(el('div', { class: 'btnrow' }, button('Load all weeks from one ZIP…', () => allInp.click(), 'small'), allInp));
+  top.append(el('div', { class: 'help' }, 'Load one ZIP per week below, or one ZIP with everything and it will be split into calendar weeks.'));
+  root.append(top);
+  if (usingSample()) root.append(el('div', { class: 'badge-s' }, 'Sample 12-week block shown — load your weekly ZIPs below'));
+  // phase plan presets
+  root.append(row('Quick phase plan', el('div', { class: 'btnrow' },
+    button('Race block', () => { phasePlan('race', W.count).forEach((ph, i) => (W.weeks[i].phase = ph)); weeklyChanged(); }, 'tiny'),
+    button('3 build + 1 down', () => { phasePlan('cycle', W.count).forEach((ph, i) => (W.weeks[i].phase = ph)); weeklyChanged(); }, 'tiny'),
+    button('All training', () => { phasePlan('all', W.count).forEach((ph, i) => (W.weeks[i].phase = ph)); weeklyChanged(); }, 'tiny')), { stack: true }));
+  const phaseOpts = PHASES.map(([k, name]) => [k, (W.phaseNames && W.phaseNames[k]) || name]);
+  const list = el('div', { class: 'weeks' });
+  W.weeks.slice(0, W.count).forEach((w, i) => {
+    const info = S.weeks[i];
+    const inp = fileInput(true, (files) => loadWeekSlot(i, files));
+    const meta = w.runs && w.runs.length
+      ? `${w.runs.length} run${w.runs.length === 1 ? '' : 's'} · ${fmtDist(info ? info.distance : 0, u, 1)} ${distUnit(u)}${info && info.start ? ' · ' + fmtDate(info.start, 'short') + ' – ' + fmtDate(info.end, 'short') : ''}`
+      : 'No runs loaded';
+    const slot = el('div', { class: 'week-slot' + (w.runs && w.runs.length ? '' : ' empty') },
+      el('div', { class: 'ws-head' },
+        el('span', { class: 'ws-n', style: { background: info ? info.color : '#888' } }, String(i + 1)),
+        (() => { const t = textInput(w.name, (v, fin) => { w.name = v; weeklyChanged(false); if (fin) emit('data'); }, { placeholder: `Week ${i + 1}` }); t.className = 'ws-name'; return t; })(),
+        select(w.phase, phaseOpts, (v) => { w.phase = v; weeklyChanged(); })),
+      w.phase === 'custom' ? el('div', { class: 'ws-custom' }, textInput(w.custom, (v, fin) => { w.custom = v; weeklyChanged(false); if (fin) emit('data'); }, { placeholder: 'Custom label, e.g. Recovery, Hills, Holiday' }), colorInput(w.customColor || '#94a3b8', (v) => { w.customColor = v; weeklyChanged(false); })) : null,
+      el('div', { class: 'ws-foot' },
+        el('span', { class: 'run-meta' }, meta),
+        button(w.runs && w.runs.length ? 'Replace' : 'Load ZIP', () => inp.click(), 'tiny' + (w.runs && w.runs.length ? '' : ' primary')), inp,
+        button('↑', () => { if (!i) return; [W.weeks[i - 1], W.weeks[i]] = [W.weeks[i], W.weeks[i - 1]]; weeklyChanged(); }, 'tiny ghost'),
+        button('↓', () => { if (i >= W.count - 1) return; [W.weeks[i + 1], W.weeks[i]] = [W.weeks[i], W.weeks[i + 1]]; weeklyChanged(); }, 'tiny ghost'),
+        w.runs && w.runs.length ? button('✕', () => { w.runs = []; w.start = null; weeklyChanged(); }, 'tiny ghost') : null));
+    slot.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); slot.classList.add('over'); });
+    slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+    slot.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); slot.classList.remove('over'); loadWeekSlot(i, [...e.dataTransfer.files]); });
+    list.append(slot);
+  });
+  root.append(section(`Weeks (${W.count})`, list, { key: 'weeks' }));
+  root.append(el('div', { class: 'btnrow' },
+    button('Sort weeks by date', () => { const head = W.weeks.slice(0, W.count), tail = W.weeks.slice(W.count); const key = (w) => (w.runs && w.runs.length ? Math.min(...w.runs.map((r) => new Date(r.start).getTime())) : Infinity); head.sort((a, b) => key(a) - key(b)); W.weeks = [...head, ...tail]; weeklyChanged(); }, 'small ghost'),
+    button('Clear all weeks', () => { if (!confirm('Remove the runs from every week? Labels are kept.')) return; W.weeks.forEach((w) => { w.runs = []; w.start = null; }); weeklyChanged(); }, 'small ghost')));
+  // phase names & colours
+  const pbox = el('div');
+  for (const [k, name, color] of PHASES) {
+    if (k === 'custom') continue;
+    pbox.append(el('div', { class: 'ws-phase' },
+      colorInput((W.phaseColors && W.phaseColors[k]) || color, (v) => { W.phaseColors = { ...(W.phaseColors || {}), [k]: v }; weeklyChanged(false); }),
+      textInput((W.phaseNames && W.phaseNames[k]) || '', (v, fin) => { W.phaseNames = { ...(W.phaseNames || {}) }; if (v) W.phaseNames[k] = v; else delete W.phaseNames[k]; weeklyChanged(false); if (fin) emit('data'); }, { placeholder: name })));
+  }
+  pbox.append(el('div', { class: 'help' }, 'Rename a phase (e.g. “Peak”) or change its colour everywhere. Custom weeks use their own label and colour.'));
+  root.append(section('Phase names & colours', pbox, { key: 'phases', open: false }));
+}
 
 // ---------- Templates ----------
 function tplPreview(tpl, w = 150) {

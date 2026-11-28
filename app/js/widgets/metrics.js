@@ -63,13 +63,31 @@ export const MULTI_METRICS = {
   range: { label: 'Period', icon: 'calendar', unit: () => '', value: (s, e, el) => s.rangeText(el?.props?.dateStyle) },
 };
 
-export function metricsFor(mode) { return mode === 'multi' ? MULTI_METRICS : SINGLE_METRICS; }
+const kmw = (w, e) => (w ? fmtDist(w.distance, e.units, 1) : '--');
+export const WEEKLY_METRICS = {
+  distance: { label: 'Total Distance', icon: 'route', unit: (u) => distUnit(u), value: (s, e, el) => fmtDist(s.distance, e.units, dec(el, 1)) },
+  avgWeek: { label: 'Avg per Week', icon: 'chart-column', unit: (u) => distUnit(u), value: (s, e, el) => fmtDist(s.avgWeek * (s.t ?? 1), e.units, dec(el, 1)) },
+  peak: { label: 'Peak Week', icon: 'trophy', unit: (u) => distUnit(u), value: (s, e) => kmw(s.peak, e) },
+  lastWeek: { label: 'Last Week', icon: 'calendar', unit: (u) => distUnit(u), value: (s, e) => kmw(s.last, e) },
+  weeks: { label: 'Weeks', icon: 'calendar-days', unit: () => '', value: (s) => String(s.count) },
+  activeWeeks: { label: 'Weeks Run', icon: 'calendar-days', unit: () => '', value: (s) => String(s.active) },
+  runs: { label: 'Runs', icon: 'footprints', unit: () => '', value: (s) => String(s.runs) },
+  time: { label: 'Total Time', icon: 'timer', unit: () => '', value: (s, e, el) => fmtDuration(s.time, ts(el) === 'auto' ? 'hm' : ts(el)) },
+  avgPace: { label: 'Avg Pace', icon: 'gauge', unit: (u) => paceUnit(u), value: (s, e) => fmtPace(s.avgPace, e.units) },
+  avgHr: { label: 'Avg HR', icon: 'heart', unit: () => 'bpm', value: (s) => fmtInt(s.avgHr) },
+  ascent: { label: 'Elev Gain', icon: 'mountain', unit: (u) => elevUnit(u), value: (s, e) => fmtElev(s.ascent, e.units) },
+  calories: { label: 'Calories', icon: 'flame', unit: () => 'kcal', value: (s) => fmtInt(s.calories) },
+  longest: { label: 'Longest Run', icon: 'medal', unit: (u) => distUnit(u), value: (s, e) => (s.longest ? fmtDist(s.longest.distance, e.units, 1) : '--') },
+  growth: { label: 'Last vs Prev', icon: 'trending-up', unit: () => '%', value: (s) => { const w = s.last, i = s.weeks.indexOf(w), p = s.weeks[i - 1]; if (!w || !p || !p.distance) return '--'; const c = (w.distance - p.distance) / p.distance * 100; return (c >= 0 ? '+' : '−') + Math.floor(Math.abs(c)); } },
+  range: { label: 'Period', icon: 'calendar', unit: () => '', value: (s, e, el) => s.rangeText(el?.props?.dateStyle) },
+};
+export function metricsFor(mode) { return mode === 'multi' ? MULTI_METRICS : mode === 'weekly' ? WEEKLY_METRICS : SINGLE_METRICS; }
 
 // Text tokens: {distance} {time} etc. Returns replaced string.
 export function expandTokens(str, env, st, el) {
   if (!str || str.indexOf('{') < 0) return str;
   return str.replace(/\{([a-zA-Z0-9_]+)(?::([a-z]+))?\}/g, (m, key, mod) => {
-    if (key === 'name') return env.mode === 'multi' ? env.title || 'Weekly Recap' : env.act?.name || 'My Run';
+    if (key === 'name') return env.mode === 'multi' ? env.title || 'Weekly Recap' : env.mode === 'weekly' ? env.title || 'Training Block' : env.act?.name || 'My Run';
     if (key === 'title') return env.title || env.act?.name || '';
     if (key === 'unit') return distUnit(env.units);
     if (key === 'paceunit') return paceUnit(env.units);
@@ -82,5 +100,6 @@ export function expandTokens(str, env, st, el) {
 }
 export const TOKEN_HELP = {
   single: ['{name}', '{distance}', '{time}', '{avgPace}', '{avgHr}', '{maxHr}', '{ascent}', '{calories}', '{avgCad}', '{date}', '{startTime}', '{unit}', '{paceunit}', '{distance:u}'],
+  weekly: ['{title}', '{distance}', '{weeks}', '{avgWeek}', '{peak}', '{lastWeek}', '{runs}', '{time}', '{avgPace}', '{longest}', '{range}', '{growth}', '{unit}'],
   multi: ['{title}', '{distance}', '{time}', '{runs}', '{avgPace}', '{avgHr}', '{ascent}', '{longest}', '{range}', '{week}', '{unit}', '{distance:u}'],
 };

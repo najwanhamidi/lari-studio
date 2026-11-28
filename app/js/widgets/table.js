@@ -1,5 +1,5 @@
 // Generic table renderer used by splits, best efforts and run lists.
-import { TS, drawText, measureStr, textBox, col, rrect, drawIcon } from '../render/draw.js';
+import { TS, drawText, measureStr, textBox, col, rrect, drawIcon, luma } from '../render/draw.js';
 import { withAlpha, clamp } from '../util.js';
 
 export const TABLE_DESIGNS = [
@@ -41,7 +41,7 @@ export function tableLayout(ctx, p, cols, rows) {
   const widths = cols.map((c) => {
     if (c.bar) return p.barW;
     let w = p.header ? measureStr(ctx, c.label, hs) : 0;
-    for (const r of list) w = Math.max(w, measureStr(ctx, r.cells[c.key] ?? '', c.ts || cs) + (c.chip ? cs.size * 0.9 : 0));
+    for (const r of list) w = Math.max(w, measureStr(ctx, r.cells[c.key] ?? '', c.ts || cs) + (c.chip || c.pill ? cs.size * 0.9 : 0));
     return Math.ceil(w);
   });
   const rowH = cs.size * p.rowScale;
@@ -104,7 +104,13 @@ export function drawTable(ctx, p, cols, L, env) {
         if (c.bar) {
           const f = clamp(r.bar ?? 0, 0, 1), bh = Math.max(6, cs.size * 0.42);
           ctx.save(); ctx.fillStyle = withAlpha(col(p.barColor, env), 0.18); rrect(ctx, x, y + (L.rowH - bh) / 2, w, bh, bh / 2); ctx.fill();
-          ctx.globalAlpha *= p.barOpacity; ctx.fillStyle = hl || col(p.barColor, env); rrect(ctx, x, y + (L.rowH - bh) / 2, Math.max(bh, w * f), bh, bh / 2); ctx.fill(); ctx.restore();
+          ctx.globalAlpha *= p.barOpacity; ctx.fillStyle = (r.barColor && col(r.barColor, env)) || hl || col(p.barColor, env); rrect(ctx, x, y + (L.rowH - bh) / 2, Math.max(bh, w * f), bh, bh / 2); ctx.fill(); ctx.restore();
+        } else if (c.pill && r.colors && r.colors[c.key]) {
+          // coloured pill per row (e.g. training phase)
+          const s = r.cells[c.key] ?? '', tw = measureStr(ctx, s, ts), ph = cs.size * 0.45, pc = col(r.colors[c.key], env);
+          const bw = tw + ph * 2, bh = cs.size * 1.3, bx = c.align === 'right' ? x + w - bw + ph : x - ph;
+          ctx.save(); ctx.fillStyle = pc; rrect(ctx, bx, y + (L.rowH - bh) / 2, bw, bh, bh / 2); ctx.fill(); ctx.restore();
+          drawText(ctx, s, bx + ph, base, { ...ts, color: luma(pc) > 0.55 ? '#0d0f14' : '#ffffff', shadow: false }, env);
         } else if (c.chip && p.design === 'chips') {
           const s = r.cells[c.key] ?? '', tw = measureStr(ctx, s, ts), ph = cs.size * 0.45;
           ctx.save(); ctx.fillStyle = hl || col(p.accent, env); const bw = tw + ph * 2, bh = cs.size * 1.3; const bx = c.align === 'right' ? x + w - bw + ph : x - ph;
